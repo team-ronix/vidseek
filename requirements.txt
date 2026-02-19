@@ -1,0 +1,8 @@
+torch
+torchvision
+transformers
+ffmpeg-python
+numpy
+easyocr
+opencv-python
+scenedetect
