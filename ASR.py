@@ -32,14 +32,18 @@ class ASR:
     def extract_audio_from_video(self):
         # whisper requires mono audio not stereo -> ac=1
         # whisper trained on 16kHz audio -> ar='16k'
-        audio, err = (
-            ffmpeg
-            .input(self.video_path)
-            .output('-', format='s16le', acodec='pcm_s16le', ac=1, ar='16k')
-            .run(capture_stdout=True, capture_stderr=True)
-        )
-        if(err):
-            print(err)
+        try:
+            audio, err = (
+                ffmpeg
+                .input(self.video_path)
+                .output('-', format='s16le', acodec='pcm_s16le', ac=1, ar='16k')
+                .run(capture_stdout=True, capture_stderr=True)
+            )
+            if err and err.strip():
+                print(f"FFmpeg stderr: {err.decode('utf-8')}")
+        except ffmpeg.Error as e:
+            print(f"Error extracting audio: {e.stderr.decode('utf-8')}")
+            raise
         # / 32768.0 -> for normalizaiton to range -1 to 1
         self.audio = np.frombuffer(audio, np.int16).flatten().astype(np.float32) / 32768.0
         
@@ -60,7 +64,7 @@ class ASR:
             
     def get_text(self):
         if self.result is None:
-            return self.transcribe()
+            self.transcribe()
         return self.result['text']
     
     def get_chunks(self):

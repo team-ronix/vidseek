@@ -79,7 +79,7 @@ htmlcov/
 
 # Debug output
 debug_frames/
-inverted_index.json
+*inverted_index.json
 
 # Logs
 *.log
@@ -95,3 +95,5 @@ inverted_index.json
 
 # Uploads folder
 uploads/
+
+*.pt

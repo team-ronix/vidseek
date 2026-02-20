@@ -54,7 +54,7 @@ class OCR:
                 print("       Warning: Frame data is None")
 
 
-    def save_inverted_index(self, output_path='inverted_index.json'):
+    def save_inverted_index(self, output_path='ocr_inverted_index.json'):
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(self.inverted_index, f, indent=2, ensure_ascii=False)
             
