@@ -52,14 +52,14 @@ class ASR:
             self.extract_audio_from_video()
         return self.audio
     
-    def transcribe(self):
+    def transcribe(self, task="transcribe"):
         audio = self.get_audio()
         self.result = self.pipe(
             audio,
             chunk_length_s=30,
             batch_size=8,
             return_timestamps=True,
-            generate_kwargs={"task": "translate"}
+            generate_kwargs={"task": task}
         )
             
     def get_text(self):

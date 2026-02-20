@@ -7,7 +7,7 @@ import sys
 
 
 videos_folder = './'
-video_path = os.path.join(videos_folder, 'video.mp4')
+video_path = os.path.join(videos_folder, 'video2.mp4')
 
 if not os.path.exists(video_path):
     print(f"Error: Video file not found at {video_path}")
@@ -42,6 +42,6 @@ object_inverted_index = object_detector.get_inverted_index()
 
 print(f"\nAudio transcription processing...")
 asr_processor = ASR(video_path=video_path, model_name='openai/whisper-large-v3')
-asr_processor.transcribe()
+asr_processor.transcribe(task="translate")
 transcription_result = asr_processor.get_text()
 asr_processor.save_transcription('transcription.json')

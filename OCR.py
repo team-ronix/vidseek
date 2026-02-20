@@ -28,19 +28,27 @@ class OCR:
                 blur = cv2.GaussianBlur(gray, (5, 5), 0)
                 
                 # Run OCR
+                
+                # TODO: Maybe we need to do some transfromation to the frame to enhance text detection
+                
                 print("       Running OCR...")
                 result = self.reader.readtext(blur)
                 print(f"       Detected {len(result)} text regions")
                 
-                for detection in result:
-                    bbox, text, confidence = detection
+                # Merge close boxes to form full sentence
+                merged_result = self.merge_nearby_text(result, horizontal_threshold=50, vertical_threshold=15)
+
+                
+                for detection in merged_result:
+                    text, confidence = detection
                     print(f"       - '{text}' (confidence: {confidence:.2f})")
                     # Add to inverted index
                     if text not in self.inverted_index:
                         self.inverted_index[text] = []
                     
-                    if text in self.inverted_index and any(occ['scene'] == scene.index for occ in self.inverted_index[text]):
-                        continue  # Skip if already exists in this scene
+                    # Skip if already exists in this scene
+                    if any(occ['scene'] == scene.index for occ in self.inverted_index[text]):
+                        continue
 
                     self.inverted_index[text].append({
                         'scene': scene.index,
@@ -60,4 +68,56 @@ class OCR:
             
     def get_inverted_index(self):
         return self.inverted_index
+    
+    def sorting_function(self, result):
+        box = result[0]
+        center_y = (box[0][1] + box[2][1]) / 2
+        center_x = (box[0][0] + box[2][0]) / 2
+        return (center_y, center_x)
+    
+    def merge_nearby_text(self, ocr_results, horizontal_threshold=50, vertical_threshold=15):
+        if not ocr_results:
+            return []
+        sorted_results = sorted(ocr_results, key=self.sorting_function)
+        merged = []
+        current_group = [sorted_results[0]]
+        
+        for i in range(1, len(sorted_results)):
+            prev_box = current_group[-1][0]
+            curr_box = sorted_results[i][0]
+            
+            prev_center_y = (prev_box[0][1] + prev_box[2][1]) / 2
+            curr_center_y = (curr_box[0][1] + curr_box[2][1]) / 2
+            prev_height = abs(prev_box[2][1] - prev_box[0][1])
+            curr_height = abs(curr_box[2][1] - curr_box[0][1])
+            
+            prev_right_x = prev_box[1][0]
+            curr_left_x = curr_box[0][0]
+            
+            # Check if boxes are on the same line
+            # Use the maximum height as reference for vertical alignment
+            max_height = max(prev_height, curr_height)
+            vertical_distance = abs(curr_center_y - prev_center_y)
+            horizontal_distance = curr_left_x - prev_right_x
+            
+            # Boxes are on same line if their centers are within a fraction of the max height
+            # and they're close horizontally
+            same_line = vertical_distance <= max(vertical_threshold, max_height * 0.5)
+            close_horizontal = horizontal_distance <= horizontal_threshold
+            
+            if same_line and close_horizontal:
+                current_group.append(sorted_results[i])
+            else:
+                if current_group:
+                    merged_text = ' '.join([item[1] for item in current_group])
+                    avg_confidence = sum([item[2] for item in current_group]) / len(current_group)
+                    merged.append((merged_text, avg_confidence))
+                current_group = [sorted_results[i]]
+        
+        if current_group:
+            merged_text = ' '.join([item[1] for item in current_group])
+            avg_confidence = sum([item[2] for item in current_group]) / len(current_group)
+            merged.append((merged_text, avg_confidence))
+        
+        return merged
         

@@ -31,8 +31,9 @@ class ObjectDetector:
                         if name not in self.inverted_index:
                             self.inverted_index[name] = []
                         
-                        if name in self.inverted_index and any(occ['scene'] == scene.index for occ in self.inverted_index[name]):
-                            continue  # Skip if already exists in this scene
+                        # Skip if already exists in this scene
+                        if any(occ['scene'] == scene.index for occ in self.inverted_index[name]):
+                            continue
 
                         self.inverted_index[name].append({
                             'scene': scene.index,

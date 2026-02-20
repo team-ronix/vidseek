@@ -76,6 +76,10 @@ class SceneSegmenter:
         end_frame = scene.end_frame
         total_frames = end_frame - start_frame
         
+        # Handle edge case of zero or negative frames
+        if total_frames <= 0:
+            return [start_frame]
+        
         if duration < 2.0:
             # Short scene: just middle frame
             middle = start_frame + total_frames // 2
@@ -98,6 +102,11 @@ class SceneSegmenter:
             # Very long scene: 1 frame every 3 seconds, max 5 frames
             fps = scene.fps
             frames_per_interval = int(fps * 3)  # 3 seconds worth of frames
+            
+            # Safety check: prevent division by zero
+            if frames_per_interval <= 0:
+                frames_per_interval = 1
+            
             num_frames = min(5, max(1, total_frames // frames_per_interval))
             
             # Distribute frames evenly
