@@ -6,4 +6,5 @@ numpy
 easyocr
 opencv-python
 scenedetect
-ultralytics 
+ultralytics
+sentence-transformers 

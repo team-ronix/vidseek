@@ -2,18 +2,19 @@ from SceneSegmenter import SceneSegmenter
 from OCR import OCR
 from ASR import ASR
 from ObjectDetector import ObjectDetector
+from SentenceSegmenter import SentenceSegmentation
 import os
 import sys
 
 
-videos_folder = './'
-video_path = os.path.join(videos_folder, 'video2.mp4')
+videos_folder = './videos'
+video_path = os.path.join(videos_folder, '1.mp4')
 
 if not os.path.exists(video_path):
     print(f"Error: Video file not found at {video_path}")
     sys.exit(1)
 
-### Visual Processing
+## Visual Processing
 
 print(f"Video segmenation processing...")
 scene_segmenter = SceneSegmenter(video_path)
@@ -45,3 +46,10 @@ asr_processor = ASR(video_path=video_path, model_name='openai/whisper-large-v3')
 asr_processor.transcribe(task="translate")
 transcription_result = asr_processor.get_text()
 asr_processor.save_transcription('transcription.json')
+
+## Sentence Segmentation
+
+print(f"\nSentence segmentation processing...")
+SentenceSegmentation_processor = SentenceSegmentation(transcript_json="transcription.json", similarity_threshold=0.75)
+SentenceSegmentation_processor.segment()
+SentenceSegmentation_processor.save_segments("segmented_transcript.json")

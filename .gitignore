@@ -97,3 +97,5 @@ debug_frames/
 uploads/
 
 *.pt
+transcription.json
+segmented_transcript.json
