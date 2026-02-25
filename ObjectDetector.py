@@ -23,6 +23,7 @@ class ObjectDetector:
             
             if frame is not None:    
                 results = self.model(frame)
+                results.sort(key=lambda x: x.boxes.conf, reverse=True)  # Sort results by confidence
                 for result in results:
                     names = [result.names[cls.item()] for cls in result.boxes.cls.int()]  # class name of each box
                     confs = result.boxes.conf  # confidence score of each box

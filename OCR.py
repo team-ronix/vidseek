@@ -37,8 +37,8 @@ class OCR:
                 
                 # Merge close boxes to form full sentence
                 merged_result = self.merge_nearby_text(result, horizontal_threshold=50, vertical_threshold=15)
+                merged_result.sort(key=lambda x: x[1], reverse=True)  # Sort by confidence
 
-                
                 for detection in merged_result:
                     text, confidence = detection
                     print(f"       - '{text}' (confidence: {confidence:.2f})")
