@@ -28,6 +28,8 @@ class ObjectDetector:
                     names = [result.names[cls.item()] for cls in result.boxes.cls.int()]  # class name of each box
                     confs = result.boxes.conf  # confidence score of each box
                     for (name, conf) in zip(names, confs):
+                        if conf < 0.5:
+                            continue
                         print(f"       - Detected '{name}' with confidence {conf:.2f}")
                         if name not in self.inverted_index:
                             self.inverted_index[name] = []

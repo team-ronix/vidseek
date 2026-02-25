@@ -93,6 +93,7 @@ print(f"\nSentence segmentation processing...")
 SentenceSegmentation_processor = SentenceSegmentation(video_path=video_path, transcript_json="transcription.json", similarity_threshold=0.75)
 SentenceSegmentation_processor.segment()
 SentenceSegmentation_processor.save_segments("segmented_transcript.json")
+transcript_segments = SentenceSegmentation_processor.segments
 
 
 # Free memory from sentence segmentation processor
@@ -104,7 +105,10 @@ gc.collect()
 
 ### Transformation
 
-transformer = Transformer(ocr_inverted_index, SentenceSegmentation_processor.segments, model_id='all-MiniLM-L6-v2')
+transformer = Transformer(ocr_inverted_index, transcript_segments, model_id='all-MiniLM-L6-v2')
 transformer.transform()
+transformer.save_metadata('metadata.json')
+transformer.save_embeddings('embeddings.json')
+print(f"Generated {len(transformer.get_embeddings())} total embeddings")
 
 print("\nPipeline completed successfully!")

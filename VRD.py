@@ -23,6 +23,8 @@ class VRD:
             torch_dtype=torch.float16,
             low_cpu_mem_usage=True
         )
+        if torch.cuda.is_available():
+            self.model.to("cuda")
         
     def detect_relationships(self):
         prompt = (
@@ -45,9 +47,12 @@ class VRD:
                 continue
             
             if frame is not None:
-                inputs = self.processor(text=prompt, images=frame, return_tensors="pt")
+                # Convert BGR to RGB for LLaVA model
+                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                image = Image.fromarray(frame_rgb)
+                
+                inputs = self.processor(text=prompt, images=image, return_tensors="pt")
                 if torch.cuda.is_available():
-                    self.model.to("cuda")
                     inputs = {k: v.to("cuda") if isinstance(v, torch.Tensor) else v for k, v in inputs.items()}
                 generate_ids = self.model.generate(**inputs, max_new_tokens=150)
                 output = self.processor.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]

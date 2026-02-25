@@ -41,6 +41,8 @@ class OCR:
 
                 for detection in merged_result:
                     text, confidence = detection
+                    if confidence < 0.5 or len(text.strip()) < 5:  
+                        continue
                     print(f"       - '{text}' (confidence: {confidence:.2f})")
                     # Add to inverted index
                     if text not in self.inverted_index:
