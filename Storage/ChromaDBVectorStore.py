@@ -1,4 +1,5 @@
 import chromadb
+from .VectorStore import VectorStore, VideoVector
 
 class ChromaDBVectorStore(VectorStore):
     def __init__(self):

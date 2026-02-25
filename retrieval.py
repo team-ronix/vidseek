@@ -1,4 +1,5 @@
 from Transformer import Transformer
+from Storage.ChromaDBVectorStore import ChromaDBVectorStore
 
 query = "March"
 

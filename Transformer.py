@@ -1,5 +1,6 @@
 from sentence_transformers import SentenceTransformer
 import json
+from Storage.VectorStore import VectorStore, VideoVector
 class Transformer:
     def __init__(self, ocr_results, transcripts, model_id = 'all-MiniLM-L6-v2'):
         self.model = SentenceTransformer(model_id)
