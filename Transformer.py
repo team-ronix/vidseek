@@ -41,6 +41,14 @@ class Transformer:
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(self.metadata, f, indent=2, ensure_ascii=False)
             
-    def save_embeddings(self, output_path='embeddings.json'):
-        with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump([embedding.tolist() for embedding in self.embeddings], f, indent=2)
+    def save_embeddings(self, VectorStore: VectorStore):
+        for i, embedding in enumerate(self.embeddings):
+            vector = VideoVector(
+                id=f"embedding_{i}",
+                embedding=embedding.tolist(),
+                metadata=self.metadata[i]
+            )
+            VectorStore.storeVector(vector)
+
+    def transform_single_text(self, text):
+        return self.model.encode(text)
