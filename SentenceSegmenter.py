@@ -1,42 +1,51 @@
 import json
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, util
 from sklearn.metrics.pairwise import cosine_similarity
 
 class SentenceSegmentation:
     def __init__(self, transcript_json, similarity_threshold=0.75):
-        with open(transcript_json, "r", encoding="utf-8") as f:
-                self.transcript = json.load(f)
+        with open(transcript_json, 'r') as f:
+            self.data = json.load(f)
+        self.chunks = self.data.get('chunks', [])
         self.similarity_threshold = similarity_threshold
-        self.groups = None
-        self.segments = None
+        self.model = SentenceTransformer('all-MiniLM-L6-v2')
+        self.segments = []
+        self.groups = []
 
     def group_chunks_by_topic(self):
-        model = SentenceTransformer("all-MiniLM-L6-v2")
-        chunks = self.transcript["chunks"]
-        texts = [c["text"] for c in chunks]
-        embeddings = model.encode(texts)
-
-        groups = []
-        current_group = [chunks[0]]
-
-        for i in range(1, len(chunks)):
-            sim = cosine_similarity([embeddings[i-1]], [embeddings[i]])[0][0]
-            if sim >= self.similarity_threshold:
-                current_group.append(chunks[i])
+        if not self.chunks:
+            return
+        
+        current_group = [self.chunks[0]]
+        for i in range(1, len(self.chunks)):
+            prev_text = self.chunks[i-1]['text']
+            curr_text = self.chunks[i]['text']
+            
+            emb1 = self.model.encode(prev_text, convert_to_tensor=True)
+            emb2 = self.model.encode(curr_text, convert_to_tensor=True)
+            similarity = util.cos_sim(emb1, emb2).item()
+            
+            if similarity >= self.similarity_threshold:
+                current_group.append(self.chunks[i])
             else:
-                groups.append(current_group)
-                current_group = [chunks[i]]
-
-        groups.append(current_group)
-        self.groups = groups
+                self.groups.append(current_group)
+                current_group = [self.chunks[i]]
+        self.groups.append(current_group)
 
     def build_segments(self):
         segments = []
         for group in self.groups:
+            start_time = group[0].get('timestamp', [0, 0])[0]
+            end_time = group[-1].get('timestamp', [0, 0])[1]
+            
+            # Handle NoneType timestamps safely
+            safe_start = round(start_time, 2) if start_time is not None else 0.0
+            safe_end = round(end_time, 2) if end_time is not None else safe_start
+            
             segments.append({
                 "text": " ".join(c["text"] for c in group).strip(),
-                "start": round(group[0]["timestamp"][0], 2),
-                "end": round(group[-1]["timestamp"][1], 2)
+                "start": safe_start,
+                "end": safe_end
             })
         self.segments = segments
 
@@ -45,12 +54,6 @@ class SentenceSegmentation:
         self.build_segments()
         return self.segments
 
-    # -------------------------------
-    # Save the segmented file into JSON
-    # -------------------------------
-    def save_segments(self, output_path="segmented_transcript.json"):
-        if self.segments is None:
-            raise ValueError("Run segment() first before saving.")
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(self.segments, f, indent=2, ensure_ascii=False)
-        print(f"Segmented transcript saved to {output_path}")
+    def save_segments(self, output_path):
+        with open(output_path, 'w') as f:
+            json.dump(self.segments, f, indent=4)
