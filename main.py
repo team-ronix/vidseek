@@ -4,6 +4,7 @@ from ASR import ASR
 from ObjectDetector import ObjectDetector
 from VRD import VRD
 from SentenceSegmenter import SentenceSegmentation
+from Transformer import Transformer
 import os
 import sys
 import gc
@@ -89,14 +90,30 @@ gc.collect()
 ## Sentence Segmentation
 
 print(f"\nSentence segmentation processing...")
-SentenceSegmentation_processor = SentenceSegmentation(transcript_json="transcription.json", similarity_threshold=0.75)
+SentenceSegmentation_processor = SentenceSegmentation(video_path=video_path, transcript_json="transcription.json", similarity_threshold=0.75)
 SentenceSegmentation_processor.segment()
 SentenceSegmentation_processor.save_segments("segmented_transcript.json")
+transcript_segments = SentenceSegmentation_processor.segments
+
+
+from Storage.ChromaDBVectorStore import ChromaDBVectorStore
 
 # Free memory from sentence segmentation processor
 del SentenceSegmentation_processor
 if torch.cuda.is_available():
     torch.cuda.empty_cache()
 gc.collect()
+
+
+### Transformation
+
+transformer = Transformer(ocr_inverted_index, transcript_segments, model_id='all-MiniLM-L6-v2')
+transformer.transform()
+transformer.save_embeddings(ChromaDBVectorStore())
+
+
+
+
+print(f"Generated {len(transformer.get_embeddings())} total embeddings")
 
 print("\nPipeline completed successfully!")

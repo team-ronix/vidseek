@@ -3,7 +3,8 @@ from sentence_transformers import SentenceTransformer, util
 from sklearn.metrics.pairwise import cosine_similarity
 
 class SentenceSegmentation:
-    def __init__(self, transcript_json, similarity_threshold=0.75):
+    def __init__(self, video_path, transcript_json, similarity_threshold=0.75):
+        self.video_path = video_path
         with open(transcript_json, 'r') as f:
             self.data = json.load(f)
         self.chunks = self.data.get('chunks', [])
@@ -45,11 +46,9 @@ class SentenceSegmentation:
             segments.append({
                 "text": " ".join(c["text"] for c in group).strip(),
                 "start": safe_start,
-                "end": safe_end
+                "end": safe_end,
+                "video_path": self.video_path
             })
-        self.segments = segments
-
-    def segment(self):
         self.group_chunks_by_topic()
         self.build_segments()
         return self.segments
