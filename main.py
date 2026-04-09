@@ -115,9 +115,6 @@ transformer = Transformer(ocr_inverted_index, transcript_segments, model_id='all
 transformer.transform()
 transformer.save_embeddings(ChromaDBVectorStore())
 
-
-
-
 print(f"Generated {len(transformer.get_embeddings())} total embeddings")
 
 print("\nPipeline completed successfully!")
