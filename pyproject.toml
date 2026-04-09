@@ -19,7 +19,7 @@ dependencies = [
     "sentence-transformers (>=5.2.3,<6.0.0)",
     "chromadb (>=1.5.1,<2.0.0)",
     "sqlalchemy (>=2.0.47,<3.0.0)",
-    "alembic (>=1.18.4,<2.0.0)"
+    "alembic (>=1.18.4,<2.0.0)",
     "psycopg2-binary (>=2.9.11,<3.0.0)"
 ]
 
