@@ -1,18 +1,23 @@
-from SceneSegmenter import SceneSegmenter
-from OCR import OCR
-from ASR import ASR
-from ObjectDetector import ObjectDetector
-from VRD import VRD
-from SentenceSegmenter import SentenceSegmentation
+from visual.SceneSegmenter import SceneSegmenter
+from visual.OCR import OCR
+from audio.ASR import ASR
+from visual.ObjectDetector import ObjectDetector
+from visual.VRD import VRD
+from audio.SentenceSegmenter import SentenceSegmentation
 from Transformer import Transformer
 import os
 import sys
 import gc
 import torch
+from Storage.ChromaDBVectorStore import ChromaDBVectorStore
 
 
 videos_folder = './videos'
 video_path = os.path.join(videos_folder, '1.mp4')
+
+json_folder = './json_outputs'
+if not os.path.exists(json_folder):
+    os.makedirs(json_folder)
 
 if not os.path.exists(video_path):
     print(f"Error: Video file not found at {video_path}")
@@ -37,7 +42,7 @@ gc.collect()
 print("Starting OCR processing...")
 ocr_processor = OCR(frames, video_path)
 ocr_processor.process_frames()
-ocr_index_path = os.path.join('.', 'ocr_inverted_index.json')
+ocr_index_path = os.path.join(json_folder, 'ocr_inverted_index.json')
 ocr_processor.save_inverted_index(ocr_index_path)
 ocr_inverted_index = ocr_processor.get_inverted_index()
 
@@ -50,7 +55,7 @@ gc.collect()
 print(f"\nObject detection processing...")
 object_detector = ObjectDetector(video_path, frames, model_name='yolo26l.pt')
 object_detector.detect_objects()
-object_index_path = os.path.join('.', 'object_inverted_index.json')
+object_index_path = os.path.join(json_folder, 'object_inverted_index.json')
 object_detector.save_inverted_index(object_index_path)
 object_inverted_index = object_detector.get_inverted_index()
 
@@ -63,7 +68,7 @@ gc.collect()
 print(f"\nVisual relationship detection processing...")
 vrd_processor = VRD(frames=frames, video_path=video_path, model_id='llava-hf/llava-1.5-7b-hf')
 vrd_processor.detect_relationships()
-vrd_index_path = os.path.join('.', 'vrd_inverted_index.json')
+vrd_index_path = os.path.join(json_folder, 'vrd_inverted_index.json')
 vrd_processor.save_inverted_index(vrd_index_path)
 vrd_inverted_index = vrd_processor.get_inverted_index()
 
@@ -79,7 +84,7 @@ print(f"\nAudio transcription processing...")
 asr_processor = ASR(video_path=video_path, model_name='openai/whisper-large-v3')
 asr_processor.transcribe(task="translate")
 transcription_result = asr_processor.get_text()
-asr_processor.save_transcription('transcription.json')
+asr_processor.save_transcription(os.path.join(json_folder, 'transcription.json'))
 
 # Free memory from ASR processor
 del asr_processor
@@ -90,13 +95,12 @@ gc.collect()
 ## Sentence Segmentation
 
 print(f"\nSentence segmentation processing...")
-SentenceSegmentation_processor = SentenceSegmentation(video_path=video_path, transcript_json="transcription.json", similarity_threshold=0.75)
+SentenceSegmentation_processor = SentenceSegmentation(video_path=video_path, 
+                                transcript_json=os.path.join(json_folder, 'transcription.json'), similarity_threshold=0.75)
 SentenceSegmentation_processor.segment()
-SentenceSegmentation_processor.save_segments("segmented_transcript.json")
+SentenceSegmentation_processor.save_segments(os.path.join(json_folder, 'segmented_transcript.json'))
 transcript_segments = SentenceSegmentation_processor.segments
 
-
-from Storage.ChromaDBVectorStore import ChromaDBVectorStore
 
 # Free memory from sentence segmentation processor
 del SentenceSegmentation_processor
