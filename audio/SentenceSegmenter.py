@@ -49,9 +49,6 @@ class SentenceSegmentation:
                 "end": safe_end,
                 "video_path": self.video_path
             })
-        self.segments = segments
-
-    def segment(self):
         self.group_chunks_by_topic()
         self.build_segments()
         return self.segments
