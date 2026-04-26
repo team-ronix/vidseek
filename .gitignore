@@ -92,6 +92,7 @@ debug_frames/
 *.db
 *.sqlite
 *.sqlite3
+transformer/data/*
 
 # Uploads folder
 uploads/
@@ -99,3 +100,4 @@ uploads/
 *.pt
 transcription.json
 segmented_transcript.json
+
