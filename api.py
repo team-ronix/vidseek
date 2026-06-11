@@ -16,7 +16,6 @@ from Storage.ChromaDBVectorStore import ChromaDBVectorStore
 from Storage.SQL.Repositories.VideoRepository import VideoRepository
 from Storage.SQL.Repositories.VRDRepository import VRDRepository
 from Storage.SQL.Repositories.ObjectRepository import ObjectRepository
-from Storage.SQL.Models.Video import Video as VideoModel
 from Storage.SQL.DatabaseClient import SessionLocal
 
 import gc
@@ -94,8 +93,8 @@ def _merge_results(
                 type=row["type"],
                 text=row["text"],
                 video_path=video_path,
-                start_time=0.0,   # SQL models don't store timing per-occurrence yet
-                end_time=0.0,
+                start_time=row.get("start_time", 0.0),
+                end_time=row.get("end_time", 0.0),
                 score=1.0,
             )
         )
@@ -338,8 +337,113 @@ def get_job_status(job_id: str):
 def list_videos():
     video_repo = VideoRepository()
     # Simple full scan — fine for moderate collections
+    from Storage.SQL.Models.Video import Video as VideoModel
+    from Storage.SQL.DatabaseClient import SessionLocal
     db = SessionLocal()
     videos = db.query(VideoModel).all()
     db.close()
     video_repo.close()
     return [{"id": v.id, "file_name": v.file_name, "file_path": v.file_path} for v in videos]
+
+
+# ── Object & VRD option endpoints ─────────────────────────────────────────────
+
+@app.get("/objects")
+def list_objects():
+    """Return all distinct detected objects in the database."""
+    from Storage.SQL.Models.Object import Object as ObjectModel
+    db = SessionLocal()
+    try:
+        rows = db.query(ObjectModel).order_by(ObjectModel.key).all()
+        return [{"id": r.id, "key": r.key} for r in rows]
+    finally:
+        db.close()
+
+
+@app.get("/vrd/options")
+def list_vrd_options():
+    """Return all distinct subjects, predicates (relations), and objects from VRD."""
+    from Storage.SQL.Models.VRDSubject   import VRDSubject
+    from Storage.SQL.Models.VRDPredicate import VRDPredicate
+    from Storage.SQL.Models.VRDObject    import VRDObject
+    db = SessionLocal()
+    try:
+        subjects  = [r.key for r in db.query(VRDSubject).order_by(VRDSubject.key).all()]
+        relations = [r.key for r in db.query(VRDPredicate).order_by(VRDPredicate.key).all()]
+        objects   = [r.key for r in db.query(VRDObject).order_by(VRDObject.key).all()]
+        return {"subjects": subjects, "relations": relations, "objects": objects}
+    finally:
+        db.close()
+
+
+@app.get("/search/object")
+def search_by_object(key: str):
+    """Return all video scenes where a given object appears."""
+    from Storage.SQL.Models.Object      import Object as ObjectModel
+    from Storage.SQL.Models.ObjectVideo import ObjectVideo
+    from Storage.SQL.Models.Video       import Video as VideoModel
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(ObjectVideo, ObjectModel, VideoModel)
+            .join(ObjectModel,  ObjectVideo.object_id == ObjectModel.id)
+            .join(VideoModel,   ObjectVideo.video_id  == VideoModel.id)
+            .filter(ObjectModel.key == key)
+            .all()
+        )
+        return [
+            {
+                "type": "object",
+                "text": obj.key,
+                "video_path": video.file_path,
+                "video_name": video.file_name,
+                "start_time": obj_vid.start_time,
+                "end_time":   obj_vid.end_time,
+            }
+            for obj_vid, obj, video in rows
+        ]
+    finally:
+        db.close()
+
+
+@app.get("/search/vrd")
+def search_by_vrd(
+    subject:  Optional[str] = None,
+    object:   Optional[str] = None,
+    relation: Optional[str] = None,
+):
+    """Return all video scenes matching a VRD triple (any combination of subject/object/relation)."""
+    from Storage.SQL.Models.VRDSubject   import VRDSubject
+    from Storage.SQL.Models.VRDPredicate import VRDPredicate
+    from Storage.SQL.Models.VRDObject    import VRDObject
+    from Storage.SQL.Models.VRDVideo     import VRDVideo
+    from Storage.SQL.Models.Video        import Video as VideoModel
+    db = SessionLocal()
+    try:
+        q = (
+            db.query(VRDVideo, VRDSubject, VRDPredicate, VRDObject, VideoModel)
+            .join(VRDSubject,   VRDVideo.subject_id   == VRDSubject.id)
+            .join(VRDPredicate, VRDVideo.predicate_id == VRDPredicate.id)
+            .join(VRDObject,    VRDVideo.object_id    == VRDObject.id)
+            .join(VideoModel,   VRDVideo.video_id     == VideoModel.id)
+        )
+        if subject:  q = q.filter(VRDSubject.key   == subject)
+        if relation: q = q.filter(VRDPredicate.key == relation)
+        if object:   q = q.filter(VRDObject.key    == object)
+        rows = q.all()
+        return [
+            {
+                "type":         "vrd",
+                "subject":      subj.key,
+                "predicate":    pred.key,
+                "object":       obj.key,
+                "text":         f"{subj.key} — {pred.key} — {obj.key}",
+                "video_path":   video.file_path,
+                "video_name":   video.file_name,
+                "start_time":   vrd_vid.start_time,
+                "end_time":     vrd_vid.end_time,
+            }
+            for vrd_vid, subj, pred, obj, video in rows
+        ]
+    finally:
+        db.close()

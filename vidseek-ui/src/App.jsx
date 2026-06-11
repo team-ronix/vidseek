@@ -1,78 +1,115 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { Upload } from 'lucide-react';
-import { SearchBar }   from './components/SearchBar';
-import { FilterBar }   from './components/FilterBar';
-import { ResultsList } from './components/ResultsList';
-import { VideoModal }  from './components/VideoModal';
-import { UploadPanel } from './components/UploadPanel';
-import { useSearch }   from './hooks/useSearch';
+import { SearchBar }        from './components/SearchBar';
+import { SearchPanel }      from './components/SearchPanel';
+import { ObjectSearchPanel } from './components/ObjectSearchPanel';
+import { VRDSearchPanel }   from './components/VRDSearchPanel';
+import { ResultsList }      from './components/ResultsList';
+import { UploadPanel }      from './components/UploadPanel';
+import { useSearch }        from './hooks/useSearch';
+
+// Which search mode produced the current results
+const MODE_TEXT   = 'text';
+const MODE_OBJECT = 'object';
+const MODE_VRD    = 'vrd';
 
 export default function App() {
-  const { results, loading, error, query, search } = useSearch();
-  const [activeFilter, setActiveFilter]  = useState(null);
-  const [activeResult, setActiveResult]  = useState(null);
-  const [uploadOpen,   setUploadOpen]    = useState(false);
+  const { results: textResults, loading: textLoading, error: textError,
+          query, search, changeSource } = useSearch();
 
-  const filtered = useMemo(
-    () => activeFilter ? results.filter(r => r.type === activeFilter) : results,
-    [results, activeFilter]
-  );
+  const [uploadOpen,     setUploadOpen]     = useState(false);
+  const [mode,           setMode]           = useState(null);   // text | object | vrd
+  const [sideResults,    setSideResults]    = useState([]);
+  const [sideQuery,      setSideQuery]      = useState(null);
+  const [sideLoading,    setSideLoading]    = useState(false);
 
-  const handleFilter = type => {
-    setActiveFilter(type);
+  // Determine what to show in results section
+  const activeResults = mode === MODE_TEXT   ? textResults
+                      : mode === MODE_OBJECT || mode === MODE_VRD ? sideResults
+                      : [];
+  const activeLoading = mode === MODE_TEXT   ? textLoading  : sideLoading;
+  const activeError   = mode === MODE_TEXT   ? textError    : null;
+  const activeQuery   = mode === MODE_TEXT   ? query        : sideQuery;
+
+  const handleTextSearch = (q) => {
+    if (q.trim()) setMode(MODE_TEXT);
+    else if (mode === MODE_TEXT) setMode(null);
+    search(q);
+  };
+
+  const handleObjectResults = (res, label) => {
+    setMode(MODE_OBJECT);
+    setSideResults(res);
+    setSideQuery(label);
+  };
+
+  const handleVRDResults = (res, label) => {
+    setMode(MODE_VRD);
+    setSideResults(res);
+    setSideQuery(label);
   };
 
   return (
-    <>
-      <div className="app">
-        {/* Header */}
-        <header className="app-header">
-          <div className="logo">
-            <span className="logo-mark">vid<em>seek</em></span>
-            <span className="logo-sub">semantic video search</span>
-          </div>
-          <button
-            className={`upload-toggle${uploadOpen ? ' active' : ''}`}
-            onClick={() => setUploadOpen(v => !v)}
-          >
-            <Upload size={14} />
-            <span>{uploadOpen ? 'cancel' : 'upload video'}</span>
-          </button>
-        </header>
+    <div className="app">
 
-        {/* Upload panel */}
-        {uploadOpen && <UploadPanel />}
-
-        {/* Search */}
-        <SearchBar onSearch={search} loading={loading} />
-
-        {/* Stats + filters */}
-        <div className="results-header">
-          {query && !loading && !error && (
-            <span className="results-count">
-              <strong>{filtered.length}</strong> result{filtered.length !== 1 ? 's' : ''}{' '}
-              {activeFilter ? `· ${activeFilter} only` : ''}
-            </span>
-          )}
-          <FilterBar
-            results={results}
-            activeFilter={activeFilter}
-            onFilter={handleFilter}
-          />
+      {/* ── Header ─────────────────────────────────────────── */}
+      <header className="app-header">
+        <div className="logo">
+          <span className="logo-mark">vid<em>seek</em></span>
+          <span className="logo-sep">/</span>
+          <span className="logo-sub">semantic video search</span>
         </div>
+        <button
+          className={`upload-toggle${uploadOpen ? ' active' : ''}`}
+          onClick={() => setUploadOpen(v => !v)}
+        >
+          <Upload size={13} />
+          <span>{uploadOpen ? 'cancel' : 'upload video'}</span>
+        </button>
+      </header>
 
-        {/* Results */}
-        <ResultsList
-          results={filtered}
-          query={query}
-          loading={loading}
-          error={error}
-          onPlay={setActiveResult}
+      {uploadOpen && <UploadPanel />}
+
+      {/* ── Text search row ─────────────────────────────────── */}
+      <div className="text-search-row">
+        <div className="text-search-bar">
+          <p className="section-eyebrow">Search</p>
+          <SearchBar onSearch={handleTextSearch} loading={textLoading && mode === MODE_TEXT} />
+          <SearchPanel onSourceChange={changeSource} />
+        </div>
+      </div>
+
+      {/* ── Two side-by-side panels ─────────────────────────── */}
+      <div className="panels-row">
+        <ObjectSearchPanel
+          onResults={handleObjectResults}
+          onLoading={v => { setSideLoading(v); if (v) setMode(MODE_OBJECT); }}
+        />
+        <VRDSearchPanel
+          onResults={handleVRDResults}
+          onLoading={v => { setSideLoading(v); if (v) setMode(MODE_VRD); }}
         />
       </div>
 
-      {/* Modal */}
-      <VideoModal result={activeResult} onClose={() => setActiveResult(null)} />
-    </>
+      {/* ── Results ─────────────────────────────────────────── */}
+      {(mode || activeLoading) && (
+        <div className="results-section">
+          <div className="results-section-header">
+            <span className="section-eyebrow">Results</span>
+            {mode && (
+              <span className="mode-badge mode-badge--{mode}">{mode} search</span>
+            )}
+          </div>
+          <ResultsList
+            results={activeResults}
+            query={activeQuery}
+            loading={activeLoading}
+            error={activeError}
+            source={mode}
+          />
+        </div>
+      )}
+
+    </div>
   );
 }

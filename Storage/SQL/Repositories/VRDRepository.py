@@ -35,7 +35,7 @@ class VRDRepository:
                 obj = self._get_or_create(VRDObject, object_key)
 
                 for occ in occurrences:
-                    # avoid duplicate rows for same triple + video
+                    # avoid duplicate rows for same triple + video + time range
                     exists = (
                         self.db.query(VRDVideo)
                         .filter(
@@ -43,6 +43,8 @@ class VRDRepository:
                             VRDVideo.predicate_id == predicate.id,
                             VRDVideo.object_id == obj.id,
                             VRDVideo.video_id == video_id,
+                            VRDVideo.start_time == occ.get("start_time"),
+                            VRDVideo.end_time == occ.get("end_time"),
                         )
                         .first()
                     )
@@ -54,6 +56,8 @@ class VRDRepository:
                         predicate_id=predicate.id,
                         object_id=obj.id,
                         video_id=video_id,
+                        start_time=occ.get("start_time"),
+                        end_time=occ.get("end_time"),
                     )
                     self.db.add(vrd_video)
 
@@ -89,6 +93,8 @@ class VRDRepository:
                     "type": "vrd",
                     "text": f"{subject.key}, {predicate.key}, {obj.key}",
                     "video_id": vrd_video.video_id,
+                    "start_time": vrd_video.start_time,
+                    "end_time": vrd_video.end_time,
                 }
             )
         return results

@@ -1,10 +1,10 @@
 import { ResultCard } from './ResultCard';
 
-export function ResultsList({ results, query, loading, error, onPlay }) {
+export function ResultsList({ results, query, loading, error, source }) {
   if (loading) return (
     <div className="state-panel">
-      <div className="state-glyph pulse">⬡</div>
-      <p>Searching across all video content…</p>
+      <div className="state-glyph pulse">⊙</div>
+      <p>Searching…</p>
     </div>
   );
 
@@ -16,24 +16,27 @@ export function ResultsList({ results, query, loading, error, onPlay }) {
     </div>
   );
 
-  if (!query) return (
+  if (!query && !source) return (
     <div className="state-panel">
       <div className="state-glyph">⌕</div>
-      <p>Search across transcripts, detected objects,<br />on-screen text, and visual relationships.</p>
+      <p>Use the search bar or filters above to find moments in your videos.</p>
     </div>
   );
 
   if (!results.length) return (
     <div className="state-panel">
       <div className="state-glyph">∅</div>
-      <p>No matches for <em>"{query}"</em></p>
+      <p>No matches found{query ? ` for "${query}"` : ''}.</p>
     </div>
   );
 
   return (
     <div className="results-list">
+      <p className="results-count">
+        <strong>{results.length}</strong> result{results.length !== 1 ? 's' : ''}
+      </p>
       {results.map((r, i) => (
-        <ResultCard key={i} result={r} index={i} onPlay={onPlay} />
+        <ResultCard key={`${r.type}-${i}`} result={r} index={i} />
       ))}
     </div>
   );

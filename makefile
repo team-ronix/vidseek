@@ -21,6 +21,7 @@ DB_HOST ?= localhost
 DB_PORT ?= 9051
 DB_USER ?= postgres
 DB_NAME ?= vidseek_db
+MIGRATION_MESSAGE ?= Add time range to VRDVideo and ObjectVideo
 
 .PHONY: help install run serve migrate ui-install ui-start ui-build all
 
@@ -78,7 +79,7 @@ create_db:
 	$(CREATEDB) -h $(DB_HOST) -p $(DB_PORT) -U $(DB_USER) $(DB_NAME)
 
 create_migration:
-	$(ALEMBIC) revision --autogenerate -m "Create initial database schema"
+	$(ALEMBIC) revision --autogenerate -m "$(MIGRATION_MESSAGE)"
 
 apply_migrate:
 	$(ALEMBIC) upgrade head

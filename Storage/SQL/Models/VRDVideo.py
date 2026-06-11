@@ -10,6 +10,8 @@ class VRDVideo(Base):
     predicate_id = Column(Integer, ForeignKey("vrd_predicates.id"), nullable=False, index=True)
     object_id = Column(Integer, ForeignKey("vrd_objects.id"), nullable=False, index=True)
     video_id = Column(Integer, ForeignKey("videos.id"), nullable=False, index=True)
+    start_time = Column(Integer)
+    end_time = Column(Integer)
 
     subject = relationship("VRDSubject", back_populates="vrd_videos")
     predicate = relationship("VRDPredicate", back_populates="vrd_videos")

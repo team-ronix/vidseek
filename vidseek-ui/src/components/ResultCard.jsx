@@ -1,4 +1,4 @@
-import { Play } from 'lucide-react';
+import { FileVideo, Clock } from 'lucide-react';
 
 function fmtTime(secs) {
   if (secs == null || secs === 0) return null;
@@ -7,34 +7,35 @@ function fmtTime(secs) {
   return `${m}:${s}`;
 }
 
-export function ResultCard({ result, index, onPlay }) {
+export function ResultCard({ result, index }) {
   const start = fmtTime(result.start_time);
   const end   = fmtTime(result.end_time);
-  const hasTime = start !== null;
 
   return (
-    <div
-      className="result-card"
-      style={{ animationDelay: `${index * 30}ms` }}
-      onClick={() => onPlay(result)}
-    >
-      <div className="card-body">
-        <div className="card-meta">
-          <span className={`type-badge type-${result.type}`}>{result.type}</span>
-          {hasTime && (
-            <span className="card-time">{start} → {end}</span>
+    <div className="result-card" style={{ animationDelay: `${index * 25}ms` }}>
+      <div className="result-card-inner">
+
+        {/* Type badge */}
+        <span className={`type-badge type-${result.type}`}>{result.type}</span>
+
+        {/* Matched text / triple */}
+        <p className="card-text">{result.text}</p>
+
+        {/* Location info */}
+        <div className="card-location">
+          <span className="card-loc-item">
+            <FileVideo size={12} />
+            <span className="card-path">{result.video_path}</span>
+          </span>
+          {start && (
+            <span className="card-loc-item card-timestamp">
+              <Clock size={12} />
+              <span>{start}{end ? ` → ${end}` : ''}</span>
+            </span>
           )}
         </div>
-        <p className="card-text">{result.text}</p>
-        <p className="card-path">{result.video_path}</p>
+
       </div>
-      <button
-        className="card-play"
-        aria-label="Play at this moment"
-        onClick={e => { e.stopPropagation(); onPlay(result); }}
-      >
-        <Play size={14} fill="currentColor" />
-      </button>
     </div>
   );
 }

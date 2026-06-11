@@ -6,20 +6,20 @@ export function SearchBar({ onSearch, loading }) {
 
   return (
     <div className="search-wrap">
+      <span className="search-adornment">
+        {loading
+          ? <Loader2 size={16} className="spin" />
+          : <Search size={16} />}
+      </span>
       <input
         ref={inputRef}
         className="search-input"
         type="text"
-        placeholder="search transcripts, objects, text on screen, visual relationships…"
+        placeholder="Search for video content..."
         autoComplete="off"
         spellCheck="false"
         onChange={e => onSearch(e.target.value)}
       />
-      <span className="search-adornment">
-        {loading
-          ? <Loader2 size={18} className="spin" />
-          : <Search size={18} />}
-      </span>
     </div>
   );
 }

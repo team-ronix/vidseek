@@ -107,3 +107,4 @@ models/OvO_SVM/
 OCR/models/from_scratch_SVM/
 
 node_modules/
+data/
