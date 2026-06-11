@@ -1,5 +1,6 @@
-from SQL.DatabaseClient import SessionLocal
-from SQL.Models.Video import Video
+from Storage.SQL.DatabaseClient import SessionLocal
+from Storage.SQL.Models.Video import Video
+
 
 class VideoRepository:
     def __init__(self):
@@ -14,3 +15,9 @@ class VideoRepository:
 
     def get_video_by_id(self, video_id: int) -> Video:
         return self.db.query(Video).filter(Video.id == video_id).first()
+
+    def get_video_by_path(self, file_path: str) -> Video:
+        return self.db.query(Video).filter(Video.file_path == file_path).first()
+
+    def close(self):
+        self.db.close()

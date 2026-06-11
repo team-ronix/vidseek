@@ -88,3 +88,7 @@ class ASR:
             self.transcribe()
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(self.result, f, indent=2, ensure_ascii=False)
+            
+    def load_transcription(self, input_path='transcription.json'):
+        with open(input_path, 'r', encoding='utf-8') as f:
+            self.result = json.load(f)

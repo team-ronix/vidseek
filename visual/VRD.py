@@ -85,5 +85,9 @@ class VRD:
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(self.inverted_index, f, indent=2, ensure_ascii=False)
             
+    def load_inverted_index(self, input_path='vrd_inverted_index.json'):
+        with open(input_path, 'r', encoding='utf-8') as f:
+            self.inverted_index = json.load(f)
+            
     def get_inverted_index(self):
         return self.inverted_index

@@ -59,3 +59,7 @@ class SentenceSegmentation:
     def save_segments(self, output_path):
         with open(output_path, 'w') as f:
             json.dump(self.segments, f, indent=4)
+            
+    def load_segments(self, input_path):
+        with open(input_path, 'r') as f:
+            self.segments = json.load(f)

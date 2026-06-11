@@ -105,3 +105,5 @@ y_labels_hog.joblib
 
 models/OvO_SVM/
 OCR/models/from_scratch_SVM/
+
+node_modules/
