@@ -102,6 +102,3 @@ segmented_transcript.json
 
 x_features_hog.joblib
 y_labels_hog.joblib
-
-models/OvO_SVM/
-OCR/models/from_scratch_SVM/

@@ -160,6 +160,15 @@ class OvO_SVM:
             self.models[(i, j)] = svm
             self.platt[(i, j)] = platt
 
+        print("[ALL DONE]")
+        joblib.dump(self.models, os.path.join(save_path, "model.joblib"))
+        joblib.dump(self.platt, os.path.join(save_path, "platt.joblib"))
+        # delete all individual files to save space
+        for (i, j) in pairs:
+            os.remove(os.path.join(save_path, f"svm_{i}_{j}.joblib"))
+            os.remove(os.path.join(save_path, f"platt_{i}_{j}.joblib"))
+
+
     def predict_proba(self, X):
         class_scores = {c: np.zeros(len(X)) for c in self.classes}
 
@@ -218,8 +227,10 @@ class OvO_SVM:
         obj.models = {}
         obj.platt = {}
 
-        for (i, j) in meta["pairs"]:
-            obj.models[(i, j)] = joblib.load(os.path.join(path, f"svm_{i}_{j}.joblib"))
-            obj.platt[(i, j)] = joblib.load(os.path.join(path, f"platt_{i}_{j}.joblib"))
+        # for (i, j) in meta["pairs"]:
+        #     obj.models[(i, j)] = joblib.load(os.path.join(path, f"svm_{i}_{j}.joblib"))
+        #     obj.platt[(i, j)] = joblib.load(os.path.join(path, f"platt_{i}_{j}.joblib"))
+        obj.models = joblib.load(os.path.join(path, "model.joblib"))
+        obj.platt = joblib.load(os.path.join(path, "platt.joblib"))
 
         return obj
