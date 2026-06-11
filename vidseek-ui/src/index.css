@@ -395,6 +395,7 @@ em { font-style: italic; }
   align-items: center;
   justify-content: center;
   padding: 24px;
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   animation: fadeIn .18s ease both;
 }
