@@ -1,39 +1,19 @@
 const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+async function request(url) {
+  const res = await fetch(`${BASE}${url}`);
+  if (!res.ok) throw new Error(`Request failed: ${res.status} ${url}`);
+  return res.json();
+}
+
+// ── Text search (ChromaDB: OCR + transcript) ──────────────────
 export async function searchVideos(query, topK = 20) {
-  const res = await fetch(`${BASE}/search?q=${encodeURIComponent(query)}&top_k=${topK}`);
-  if (!res.ok) throw new Error(`Search failed: ${res.status}`);
-  return res.json();
+  return request(`/search?q=${encodeURIComponent(query)}&top_k=${topK}`);
 }
 
-export async function listVideos() {
-  const res = await fetch(`${BASE}/videos`);
-  if (!res.ok) throw new Error(`Failed to list videos: ${res.status}`);
-  return res.json();
-}
-
-export async function getJobStatus(jobId) {
-  const res = await fetch(`${BASE}/jobs/${jobId}`);
-  if (!res.ok) throw new Error(`Job not found: ${res.status}`);
-  return res.json();
-}
-
-export async function getAllObjects() {
-  const res = await fetch(`${BASE}/objects`);
-  if (!res.ok) throw new Error(`Failed to fetch objects: ${res.status}`);
-  return res.json(); // [{ id, key }]
-}
-
-export async function getAllVRDOptions() {
-  const res = await fetch(`${BASE}/vrd/options`);
-  if (!res.ok) throw new Error(`Failed to fetch VRD options: ${res.status}`);
-  return res.json(); // { subjects: [], objects: [], relations: [] }
-}
-
+// ── Structured search ─────────────────────────────────────────
 export async function searchByObject(objectKey) {
-  const res = await fetch(`${BASE}/search/object?key=${encodeURIComponent(objectKey)}`);
-  if (!res.ok) throw new Error(`Object search failed: ${res.status}`);
-  return res.json();
+  return request(`/search/object?key=${encodeURIComponent(objectKey)}`);
 }
 
 export async function searchByVRD({ subject, object, relation }) {
@@ -41,9 +21,21 @@ export async function searchByVRD({ subject, object, relation }) {
   if (subject)  params.set('subject',  subject);
   if (object)   params.set('object',   object);
   if (relation) params.set('relation', relation);
-  const res = await fetch(`${BASE}/search/vrd?${params}`);
-  if (!res.ok) throw new Error(`VRD search failed: ${res.status}`);
-  return res.json();
+  return request(`/search/vrd?${params}`);
+}
+
+// ── Dropdown population ───────────────────────────────────────
+export async function getAllObjects() {
+  return request('/objects');            // [{ id, key }]
+}
+
+export async function getAllVRDOptions() {
+  return request('/vrd/options');        // { subjects, relations, objects }
+}
+
+// ── Upload + job polling ──────────────────────────────────────
+export async function getJobStatus(jobId) {
+  return request(`/jobs/${jobId}`);
 }
 
 export function uploadVideo(file, onProgress) {

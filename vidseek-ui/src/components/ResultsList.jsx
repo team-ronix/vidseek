@@ -1,6 +1,6 @@
 import { ResultCard } from './ResultCard';
 
-export function ResultsList({ results, query, loading, error, source }) {
+export function ResultsList({ results, query, loading, error }) {
   if (loading) return (
     <div className="state-panel">
       <div className="state-glyph pulse">⊙</div>
@@ -13,13 +13,6 @@ export function ResultsList({ results, query, loading, error, source }) {
       <div className="state-glyph">⚠</div>
       <p>Could not reach the API.</p>
       <p className="state-sub">{error}</p>
-    </div>
-  );
-
-  if (!query && !source) return (
-    <div className="state-panel">
-      <div className="state-glyph">⌕</div>
-      <p>Use the search bar or filters above to find moments in your videos.</p>
     </div>
   );
 

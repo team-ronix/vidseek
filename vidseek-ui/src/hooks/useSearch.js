@@ -9,7 +9,7 @@ export function useSearch() {
   const [sourceFilter, setSourceFilter] = useState('all');
   const debounceRef = useRef(null);
 
-  const search = useCallback((q) => {
+  const search = useCallback(q => {
     setQuery(q);
     clearTimeout(debounceRef.current);
     if (!q.trim()) { setResults([]); setError(null); return; }
@@ -28,9 +28,7 @@ export function useSearch() {
     }, 320);
   }, []);
 
-  const changeSource = useCallback((src) => {
-    setSourceFilter(src);
-  }, []);
+  const changeSource = useCallback(src => setSourceFilter(src), []);
 
   const filtered = sourceFilter === 'all'
     ? results
