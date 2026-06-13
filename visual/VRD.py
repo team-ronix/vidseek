@@ -31,6 +31,8 @@ class VRD:
             "USER: <image>\n"
             "Analyze this image and extract the visual relationships between the objects. "
             "Return the results strictly as a list of triplets in the format: [Subject, Predicate, Object]. "
+            "The available subjects and objects are [Dog, Cat, Couch, Table, Chair, Person, Car, Tree, Building, Street]."
+            "The available predicates are [sitting on, standing on, next to, under, above, holding, looking at, running]."
             "For example: [Dog, sitting on, Couch].\n"
             "ASSISTANT:"
         )
