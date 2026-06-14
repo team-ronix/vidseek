@@ -11,5 +11,5 @@ class ObjectVideo(Base):
     start_time = Column(Integer)
     end_time = Column(Integer)
 
-    object = relationship("Object", back_populates="object_videos")
-    video = relationship("Video", back_populates="object_videos")
+    object = relationship("Object", back_populates="object_videos", overlaps="objects,videos")
+    video = relationship("Video", back_populates="object_videos", overlaps="objects,videos")
