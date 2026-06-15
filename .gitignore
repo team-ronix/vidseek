@@ -102,3 +102,8 @@ segmented_transcript.json
 
 x_features_hog.joblib
 y_labels_hog.joblib
+
+val2017.zip
+x_char_features_hog.joblib
+y_char_labels_hog.joblib
+x_non_char_features_hog.joblib
