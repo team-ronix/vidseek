@@ -113,3 +113,14 @@ x_char_features_hog.joblib
 y_char_labels_hog.joblib
 x_non_char_features_hog.joblib
 frozen_east_text_detection.pb
+
+
+# Transformer module
+Transformer/data/
+Transformer/__pycache__/
+Transformer/**/__pycache__/
+
+# Transformer CSV data files and model files and vocabulary files
+Transformer/**/*.csv
+Transformer/**/*.pt
+Transformer/**/*.pkl
