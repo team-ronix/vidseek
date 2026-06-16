@@ -107,3 +107,4 @@ val2017.zip
 x_char_features_hog.joblib
 y_char_labels_hog.joblib
 x_non_char_features_hog.joblib
+frozen_east_text_detection.pb

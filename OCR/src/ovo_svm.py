@@ -1,9 +1,9 @@
-import numpy as np
 import os
 import joblib
 from itertools import combinations
 from sklearn.model_selection import train_test_split
 from joblib import Parallel, delayed
+import numpy as np
 
 
 class BinarySVM:

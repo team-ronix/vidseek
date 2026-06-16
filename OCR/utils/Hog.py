@@ -51,3 +51,11 @@ def HoG(orientations, magnitudes, cell_size=16, num_bins=9, block_size=2):
             features.extend(block)
 
     return np.array(features, dtype=np.float32)
+
+
+def predict_char(features, model, label_encoder):
+    features = features.reshape(1, -1)
+    model.classes = np.asarray(model.classes)
+    label = model.predict(features)
+    confidence = model.confidence(features)
+    return label, confidence

@@ -132,3 +132,51 @@ def sort_boxes_reading_order(boxes, y_thresh=10):
 
     # flatten
     return [b for line in lines for b in line]
+
+def sort_word_chars(boxes): 
+    boxes = sorted(boxes, key=lambda b: b[0])
+    return boxes
+
+def remove_image_border_box(boxes, image_shape):
+    img_h, img_w = image_shape[:2]
+    filtered_boxes = []
+    for box in boxes:
+        _, _, w, h = box
+        box_area = w * h
+        image_area = img_w * img_h
+        if box_area < 0.8 * image_area: 
+            filtered_boxes.append(box)
+    return filtered_boxes
+
+def remove_holes(boxes):
+    filtered = []
+
+    for i, box1 in enumerate(boxes):
+        x1, y1, w1, h1 = box1
+        is_inside = False
+
+        for j, box2 in enumerate(boxes):
+            if i == j:
+                continue
+
+            x2, y2, w2, h2 = box2
+
+            if (x2 <= x1 and y2 <= y1 and
+                x2 + w2 >= x1 + w1 and
+                y2 + h2 >= y1 + h1):
+                is_inside = True
+                break
+
+        if not is_inside:
+            filtered.append(box1)
+
+    return filtered
+
+
+def remove_large_boxes(boxes, image_shape, ratio=0.5):
+    filtered_boxes = []
+    for box in boxes:
+        x, y, w, h = box
+        if w < ratio * image_shape[1]:
+            filtered_boxes.append(box)
+    return filtered_boxes
