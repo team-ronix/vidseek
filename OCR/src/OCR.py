@@ -1,54 +1,98 @@
-import easyocr
 import cv2
 import json
+import numpy as np
+import os
+import joblib
+
+from ovo_svm import OvO_SVM
+from ..utils.Hog import HoG, calc_gradients, predict_char
+from ..utils.MSER import merge_boxes, sort_word_chars, remove_image_border_box, remove_holes, remove_large_boxes
+from ..utils.text_detector import extract_word_images
+
+_OCR_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_EAST_MODEL_PATH = os.path.join(_OCR_DIR, 'models', 'frozen_east_text_detection.pb')
+_SVM_MODEL_DIR = os.path.join(_OCR_DIR, 'models', 'from_scratch_SVM')
 
 class OCR:
     def __init__(self, frames, video_path):
         self.frames = frames
         self.video_path = video_path
         self.inverted_index = {}
-        self.reader = easyocr.Reader(['en'])
-    
+
+        self.net = cv2.dnn.readNet(_EAST_MODEL_PATH)
+        self.mser = cv2.MSER_create()
+        self.model = OvO_SVM().load(_SVM_MODEL_DIR)
+        self.le = joblib.load(os.path.join(_SVM_MODEL_DIR, 'OvO_SVM_label_encoder.joblib'))
+
+    def _recognize_word(self, word_img):
+        gray = cv2.cvtColor(word_img, cv2.COLOR_BGR2GRAY)
+        _, boxes = self.mser.detectRegions(gray)
+
+        unique_boxes = list({tuple(b) for b in boxes})
+        unique_boxes = merge_boxes(unique_boxes, threshold=0.3)
+        unique_boxes = sort_word_chars(unique_boxes)
+        unique_boxes = remove_image_border_box(unique_boxes, word_img.shape)
+        unique_boxes = remove_holes(unique_boxes)
+        unique_boxes = remove_large_boxes(unique_boxes, word_img.shape)
+
+        text = ""
+        char_confidences = []
+        for box in unique_boxes:
+            x, y, w, h = box
+            char_img = gray[y:y+h, x:x+w]
+            if char_img.size == 0:
+                continue
+
+            padded = cv2.copyMakeBorder(char_img, 5, 5, 5, 5, cv2.BORDER_CONSTANT, value=255)
+            blurred = cv2.GaussianBlur(padded, (5, 5), 0)
+            binarized = cv2.adaptiveThreshold(
+                blurred, 255,
+                cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                cv2.THRESH_BINARY_INV, 11, 2
+            )
+            resized = cv2.resize(binarized, (128, 128), interpolation=cv2.INTER_CUBIC)
+            dilated = cv2.dilate(resized, np.ones((3, 3), np.uint8), iterations=1)
+            normalized = dilated.astype(np.float32) / 255.0
+
+            magnitudes, orientations = calc_gradients(normalized)
+            features = HoG(orientations, magnitudes)
+            predicted_label, confidence = predict_char(features, self.model, self.le)
+            text += self.le.inverse_transform(predicted_label)[0]
+            char_confidences.append(float(confidence))
+
+        word_text = text.strip().lower()
+        word_confidence = float(np.mean(char_confidences)) if char_confidences else 0.0
+        return word_text, word_confidence
+
     def process_frames(self):
         for i, frame_data in enumerate(self.frames, 1):
             frame_number = frame_data['frame_number']
             scene = frame_data['scene']
             frame_count = frame_data['frame_count_in_scene']
             frame = frame_data['frame']
-            
+
             print(f"[{i}/{len(self.frames)}] Scene {scene.index}: Start at {scene.start_time:.2f}s, End at {scene.end_time:.2f}s, Duration {scene.duration:.2f}s ({frame_count} frames)")
             print(f"       Processing frame {frame_number}")
-            
+
             if frame_number is None:
                 continue
-            
-            if frame is not None:
-                # Preprocess frame for OCR
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                blur = cv2.GaussianBlur(gray, (5, 5), 0)
-                
-                # Run OCR
-                
-                # TODO: Maybe we need to do some transfromation to the frame to enhance text detection
-                
-                print("       Running OCR...")
-                result = self.reader.readtext(blur)
-                print(f"       Detected {len(result)} text regions")
-                
-                # Merge close boxes to form full sentence
-                merged_result = self.merge_nearby_text(result, horizontal_threshold=50, vertical_threshold=15)
-                merged_result.sort(key=lambda x: x[1], reverse=True)  # Sort by confidence
 
-                for detection in merged_result:
-                    text, confidence = detection
-                    if confidence < 0.5 or len(text.strip()) < 5:  
+            if frame is not None:
+                print("       Running OCR...")
+                word_images = extract_word_images(frame, self.net)
+                print(f"       Detected {len(word_images)} word regions")
+
+                for word_img in word_images:
+                    text, confidence = self._recognize_word(word_img)
+
+                    if not text or confidence < 0.5 or len(text.strip()) < 5:
                         continue
-                    print(f"       - '{text}' (confidence: {confidence:.2f})")
-                    # Add to inverted index
+
+                    # print(f"       - '{text}' (confidence: {confidence:.2f})")
+
                     if text not in self.inverted_index:
                         self.inverted_index[text] = []
-                    
-                    # Skip if already exists in this scene
+
                     if any(occ['scene'] == scene.index for occ in self.inverted_index[text]):
                         continue
 
@@ -63,63 +107,9 @@ class OCR:
             else:
                 print("       Warning: Frame data is None")
 
-
     def save_inverted_index(self, output_path='ocr_inverted_index.json'):
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(self.inverted_index, f, indent=2, ensure_ascii=False)
-            
+
     def get_inverted_index(self):
         return self.inverted_index
-    
-    def sorting_function(self, result):
-        box = result[0]
-        center_y = (box[0][1] + box[2][1]) / 2
-        center_x = (box[0][0] + box[2][0]) / 2
-        return (center_y, center_x)
-    
-    def merge_nearby_text(self, ocr_results, horizontal_threshold=50, vertical_threshold=15):
-        if not ocr_results:
-            return []
-        sorted_results = sorted(ocr_results, key=self.sorting_function)
-        merged = []
-        current_group = [sorted_results[0]]
-        
-        for i in range(1, len(sorted_results)):
-            prev_box = current_group[-1][0]
-            curr_box = sorted_results[i][0]
-            
-            prev_center_y = (prev_box[0][1] + prev_box[2][1]) / 2
-            curr_center_y = (curr_box[0][1] + curr_box[2][1]) / 2
-            prev_height = abs(prev_box[2][1] - prev_box[0][1])
-            curr_height = abs(curr_box[2][1] - curr_box[0][1])
-            
-            prev_right_x = prev_box[1][0]
-            curr_left_x = curr_box[0][0]
-            
-            # Check if boxes are on the same line
-            # Use the maximum height as reference for vertical alignment
-            max_height = max(prev_height, curr_height)
-            vertical_distance = abs(curr_center_y - prev_center_y)
-            horizontal_distance = curr_left_x - prev_right_x
-            
-            # Boxes are on same line if their centers are within a fraction of the max height
-            # and they're close horizontally
-            same_line = vertical_distance <= max(vertical_threshold, max_height * 0.5)
-            close_horizontal = horizontal_distance <= horizontal_threshold
-            
-            if same_line and close_horizontal:
-                current_group.append(sorted_results[i])
-            else:
-                if current_group:
-                    merged_text = ' '.join([item[1] for item in current_group])
-                    avg_confidence = sum([item[2] for item in current_group]) / len(current_group)
-                    merged.append((merged_text, avg_confidence))
-                current_group = [sorted_results[i]]
-        
-        if current_group:
-            merged_text = ' '.join([item[1] for item in current_group])
-            avg_confidence = sum([item[2] for item in current_group]) / len(current_group)
-            merged.append((merged_text, avg_confidence))
-        
-        return merged
-        
