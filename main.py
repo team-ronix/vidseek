@@ -28,6 +28,8 @@ def run(args):
         sys.exit(1)
 
     # ── 0. Register video in Postgres ────────────────────────────────────────────
+    from Storage.SQL.DatabaseClient import init_db
+    init_db()
     print("Registering video in database...")
     video_repo = VideoRepository()
     video = video_repo.get_video_by_path(video_path)
@@ -86,7 +88,7 @@ def run(args):
 
     # VRD → Postgres
     print("\nVisual relationship detection processing...")
-    vrd_processor = VRD(frames=frames, video_path=video_path, model_id='llava-hf/llava-1.5-7b-hf')
+    vrd_processor = VRD(frames=frames, video_path=video_path, api_key=os.getenv("GEMINI_TOKEN"))
     vrd_processor.detect_relationships()
     vrd_index_path = os.path.join(json_folder, args.vrd_output_path)
     vrd_processor.save_inverted_index(vrd_index_path)

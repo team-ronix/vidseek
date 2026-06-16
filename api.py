@@ -55,9 +55,6 @@ class SearchResponse(BaseModel):
     query: str
     results: list[SearchResult]
 
-
-# ── Pipeline ──────────────────────────────────────────────────────────────────
-
 def _run_pipeline(job_id: str, video_path: str, video_id: int):
     def update(msg: str, status: str = "running"):
         _jobs[job_id] = {"status": status, "message": msg}
@@ -124,9 +121,6 @@ def _run_pipeline(job_id: str, video_path: str, video_id: int):
         _jobs[job_id] = {"status": "error", "message": str(e)}
         raise
 
-
-# ── Text search ───────────────────────────────────────────────────────────────
-
 @app.get("/search", response_model=SearchResponse)
 def search(q: str, top_k: int = 10):
     if not q.strip():
@@ -135,7 +129,6 @@ def search(q: str, top_k: int = 10):
     transformer = Transformer({}, [], model_id="all-MiniLM-L6-v2")
     embedding = transformer.transform_single_text(q)
 
-    # ChromaDB: OCR + transcript hits
     try:
         ids, metadatas, distances = ChromaDBVectorStore().query(embedding, top_k=top_k)
         chroma_results = [
@@ -179,9 +172,6 @@ def search(q: str, top_k: int = 10):
 
     results = sorted(chroma_results + sql_results, key=lambda r: r.score)
     return SearchResponse(query=q, results=results)
-
-
-# ── Upload + job status ───────────────────────────────────────────────────────
 
 @app.post("/videos/upload")
 async def upload_video(file: UploadFile = File(...)):
@@ -244,8 +234,6 @@ def list_vrd_options():
     finally:
         db.close()
 
-
-# ── Structured search ─────────────────────────────────────────────────────────
 
 @app.get("/search/object")
 def search_by_object(key: str):

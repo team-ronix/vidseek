@@ -1,65 +1,76 @@
-from transformers import AutoProcessor, LlavaForConditionalGeneration
-import torch
+import google.generativeai as genai
 import json
+import time
 from PIL import Image
 import cv2
 
 class VRD:
-    def __init__(self, video_path, frames, model_id="llava-hf/llava-1.5-7b-hf"):
+    def __init__(self, video_path, frames, api_key: str, model_id="gemini-3.1-flash-lite"):
         self.video_path = video_path
         self.frames = frames
+        self.api_key = api_key
         self.model_id = model_id
         self.model = None
-        self.processor = None
         self.inverted_index = {}
         self.setup_model()
-        
+
     def setup_model(self):
         if self.model is not None:
             return
-        self.processor = AutoProcessor.from_pretrained(self.model_id)
-        self.model = LlavaForConditionalGeneration.from_pretrained(
-            self.model_id,
-            torch_dtype=torch.float16,
-            low_cpu_mem_usage=True
-        )
-        if torch.cuda.is_available():
-            self.model.to("cuda")
-        
+        genai.configure(api_key=self.api_key)
+        self.model = genai.GenerativeModel(self.model_id)
+
     def detect_relationships(self):
         prompt = (
-            "USER: <image>\n"
             "Analyze this image and extract the visual relationships between the objects. "
             "Return the results strictly as a list of triplets in the format: [Subject, Predicate, Object]. "
-            "The available subjects and objects are [Dog, Cat, Couch, Table, Chair, Person, Car, Tree, Building, Street]."
-            "The available predicates are [sitting on, standing on, next to, under, above, holding, looking at, running]."
-            "For example: [Dog, sitting on, Couch].\n"
-            "ASSISTANT:"
+            "The available subjects and objects are [Dog, Cat, Couch, Table, Chair, Person, Car, Tree, Building, Street]. "
+            "The available predicates are [sitting on, standing on, next to, under, above, holding, looking at, running]. "
+            "For example: [Dog, sitting on, Couch]. "
+            "List only the triplets, one per line, nothing else."
         )
         for i, frame_data in enumerate(self.frames, 1):
             frame_number = frame_data['frame_number']
             scene = frame_data['scene']
             frame_count = frame_data['frame_count_in_scene']
             frame = frame_data['frame']
-            
+
             print(f"[{i}/{len(self.frames)}] Scene {scene.index}: Start at {scene.start_time:.2f}s, End at {scene.end_time:.2f}s, Duration {scene.duration:.2f}s ({frame_count} frames)")
             print(f"       Processing frame {frame_number}")
-            
+
             if frame_number is None:
                 continue
-            
+
             if frame is not None:
-                # Convert BGR to RGB for LLaVA model
                 frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 image = Image.fromarray(frame_rgb)
-                
-                inputs = self.processor(text=prompt, images=image, return_tensors="pt")
-                if torch.cuda.is_available():
-                    inputs = {k: v.to("cuda") if isinstance(v, torch.Tensor) else v for k, v in inputs.items()}
-                generate_ids = self.model.generate(**inputs, max_new_tokens=150)
-                output = self.processor.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
-                assistant_response = output.split("ASSISTANT:")[-1]
-                relations: list[str] = assistant_response.strip().split(']')
+
+                output = None
+                for attempt in range(4):
+                    try:
+                        response = self.model.generate_content([prompt, image])
+                        output = response.text
+                        break
+                    except Exception as e:
+                        msg = str(e).lower()
+                        if "429" in msg or "quota" in msg or "resource exhausted" in msg:
+                            wait = 2 ** attempt
+                            print(f"       - Rate limited, retrying in {wait}s (attempt {attempt + 1}/4)")
+                            time.sleep(wait)
+                        else:
+                            print(f"       - Gemini error for frame {frame_number}: {e}")
+                            break
+                else:
+                    print(f"       - Skipping frame {frame_number} after 4 rate-limit retries")
+
+                if output is None:
+                    continue
+
+                if not output or not output.strip():
+                    print(f"       - No relationships detected for frame {frame_number}")
+                    continue
+
+                relations: list[str] = output.strip().split(']')
                 for relation in relations:
                     print(f"       - Detected relationship: {relation}")
                     while len(relation) > 0 and not relation[0].isalpha():
@@ -70,8 +81,7 @@ class VRD:
                     rel = ', '.join([part.strip() for part in triple])
                     if rel not in self.inverted_index:
                         self.inverted_index[rel] = []
-                    
-                    # Skip if already exists in this scene
+
                     if any(occ['scene'] == scene.index for occ in self.inverted_index[rel]):
                         continue
 
@@ -82,14 +92,14 @@ class VRD:
                         'start_time': scene.start_time,
                         'end_time': scene.end_time
                     })
-    
+
     def save_inverted_index(self, output_path='vrd_inverted_index.json'):
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(self.inverted_index, f, indent=2, ensure_ascii=False)
-            
+
     def load_inverted_index(self, input_path='vrd_inverted_index.json'):
         with open(input_path, 'r', encoding='utf-8') as f:
             self.inverted_index = json.load(f)
-            
+
     def get_inverted_index(self):
         return self.inverted_index
