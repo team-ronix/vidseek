@@ -9,6 +9,6 @@ class Video(Base):
     file_name = Column(String, index=True)
     file_path = Column(String, unique=True)
 
-    object_videos = relationship("ObjectVideo", back_populates="video")
-    objects = relationship("Object", secondary="object_videos", back_populates="videos")
+    object_videos = relationship("ObjectVideo", back_populates="video", overlaps="objects")
+    objects = relationship("Object", secondary="object_videos", back_populates="videos", overlaps="object_videos")
     vrd_videos = relationship("VRDVideo", back_populates="video")

@@ -8,5 +8,5 @@ class Object(Base):
     id = Column(Integer, primary_key=True, index=True)
     key = Column(String, index=True)
 
-    object_videos = relationship("ObjectVideo", back_populates="object")
-    videos = relationship("Video", secondary="object_videos", back_populates="objects")
+    object_videos = relationship("ObjectVideo", back_populates="object", overlaps="videos")
+    videos = relationship("Video", secondary="object_videos", back_populates="objects", overlaps="object_videos")

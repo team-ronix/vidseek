@@ -149,38 +149,37 @@ def normalizedCostClustering(N, K, dist_mat):
 
     k = 1
     for n in range(N):
-        area = (N-n) ** 2
-        
-        for p in _area_sums(n, K-k):
-            cost[(n, k, p)] =dsum(n, N-1)/(p+area)
-            boundaries[(n, k, p)] =N-1
+        seg_area = (N - n) ** 2
 
-            area[(n, k, p)]= area
+        for p in _area_sums(n, K - k):
+            cost[(n, k, p)] = dsum(n, N - 1) / (p + seg_area)
+            boundaries[(n, k, p)] = N - 1
+            area[(n, k, p)] = seg_area
 
-    for k in range(2, K+1):
+    for k in range(2, K + 1):
 
-        for n in range(N-1):
-            if (N-n) < k:
+        for n in range(N - 1):
+            if (N - n) < k:
                 continue
 
-            for p in _area_sums(n, K-k):
-                best_cost=float('inf')
-                best_i=-1
+            for p in _area_sums(n, K - k):
+                best_cost = float('inf')
+                best_i = -1
 
-                for i in range(n, N-1):
-                    if (N-i) < k:
+                for i in range(n, N - 1):
+                    if (N - i) < k:
                         continue
-                    area = (i- n+1)**2
-                    nextKey = (i+1, k- 1, p+area)
-                    g = dsum(n, i)/(p +area+area.get(nextKey,0))
-                    cost = g+cost.get(nextKey, 0)
-                    if cost <best_cost:
-                        best_cost= cost
-                        best_i =i
+                    seg_area = (i - n + 1) ** 2
+                    nextKey = (i + 1, k - 1, p + seg_area)
+                    g = dsum(n, i) / (p + seg_area + area.get(nextKey, 0))
+                    seg_cost = g + cost.get(nextKey, 0)
+                    if seg_cost < best_cost:
+                        best_cost = seg_cost
+                        best_i = i
                 if best_i >= 0:
-                    cost[(n, k, p)] =best_cost
-                    boundaries[(n, k, p)]= best_i
-                    area[(n, k, p)]=(best_i-n+1)**2+area.get((best_i+1, k-1, p +(best_i-n+1)**2), 0)
+                    cost[(n, k, p)] = best_cost
+                    boundaries[(n, k, p)] = best_i
+                    area[(n, k, p)] = (best_i - n + 1) ** 2 + area.get((best_i + 1, k - 1, p + (best_i - n + 1) ** 2), 0)
     return boundaries
 
 

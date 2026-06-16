@@ -8,6 +8,8 @@ class ObjectVideo(Base):
     id = Column(Integer, primary_key=True, index=True)
     object_id = Column(Integer, ForeignKey("objects.id"), nullable=False, index=True)
     video_id = Column(Integer, ForeignKey("videos.id"), nullable=False, index=True)
+    start_time = Column(Integer)
+    end_time = Column(Integer)
 
-    object = relationship("Object", back_populates="object_videos")
-    video = relationship("Video", back_populates="object_videos")
+    object = relationship("Object", back_populates="object_videos", overlaps="objects,videos")
+    video = relationship("Video", back_populates="object_videos", overlaps="objects,videos")
