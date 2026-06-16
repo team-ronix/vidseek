@@ -112,9 +112,10 @@ frozen_east_text_detection.pb
 
 # Transformer module
 Transformer/data/
-Transformer/result_*/
 Transformer/__pycache__/
 Transformer/**/__pycache__/
 
-# Transformer CSV data files
+# Transformer CSV data files and model files and vocabulary files
 Transformer/**/*.csv
+Transformer/**/*.pt
+Transformer/**/*.pkl
