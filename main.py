@@ -1,7 +1,7 @@
 from visual.SceneSegmenter import SceneSegmenter
-from OCR.OCR import OCR
+from OCR.src.OCR import OCR
 from audio.ASR import ASR
-from visual.ObjectDetector import ObjectDetector
+from visual.faster_rcnn.ObjectDetector import ObjectDetector
 from visual.VRD import VRD
 from audio.SentenceSegmenter import SentenceSegmentation
 from Transformer import Transformer
@@ -9,11 +9,15 @@ from Storage.ChromaDBVectorStore import ChromaDBVectorStore
 from Storage.SQL.Repositories.VideoRepository import VideoRepository
 from Storage.SQL.Repositories.VRDRepository import VRDRepository
 from Storage.SQL.Repositories.ObjectRepository import ObjectRepository
+from Storage.SQL.DatabaseClient import init_db
 import os
 import sys
 import gc
 import torch
 import argparse
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def run(args):
     videos_folder = args.videos_folder
@@ -28,7 +32,6 @@ def run(args):
         sys.exit(1)
 
     # ── 0. Register video in Postgres ────────────────────────────────────────────
-    from Storage.SQL.DatabaseClient import init_db
     init_db()
     print("Registering video in database...")
     video_repo = VideoRepository()
@@ -71,7 +74,7 @@ def run(args):
 
     # Object detection → Postgres
     print("\nObject detection processing...")
-    object_detector = ObjectDetector(video_path, frames, model_name='yolo26l.pt')
+    object_detector = ObjectDetector(video_path, frames)
     object_detector.detect_objects()
     object_index_path = os.path.join(json_folder, args.object_output_path)
     object_detector.save_inverted_index(object_index_path)
@@ -141,6 +144,7 @@ def run(args):
 
 
 if __name__ == "__main__":
+    print("Starting video processing pipeline...")
     parser = argparse.ArgumentParser(description="Run the video processing pipeline")
     parser.add_argument("--videos-folder", default="videos",
                         help="Path to videos folder")

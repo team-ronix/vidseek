@@ -3,7 +3,7 @@ import uuid
 import threading
 from pathlib import Path
 from typing import Optional
-
+from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -19,14 +19,15 @@ from Storage.SQL.DatabaseClient import SessionLocal
 import gc
 import torch
 from visual.SceneSegmenter import SceneSegmenter
-from OCR.OCR import OCR
-from visual.ObjectDetector import ObjectDetector
+from OCR.src.OCR import OCR
+from visual.faster_rcnn.ObjectDetector import ObjectDetector
 from visual.VRD import VRD
 from audio.ASR import ASR
 from audio.SentenceSegmenter import SentenceSegmentation
 
 UPLOAD_DIR = Path("./videos")
 UPLOAD_DIR.mkdir(exist_ok=True)
+load_dotenv()
 
 app = FastAPI(title="VidSeek API")
 
@@ -76,13 +77,13 @@ def _run_pipeline(job_id: str, video_path: str, video_id: int):
         del ocr; gc.collect()
 
         update("Object detection...")
-        obj_det = ObjectDetector(video_path, frames, model_name="yolo26l.pt")
+        obj_det = ObjectDetector(video_path, frames)
         obj_det.detect_objects()
         ObjectRepository().save_from_inverted_index(obj_det.get_inverted_index(), video_id)
         del obj_det; gc.collect()
 
         update("Visual relationship detection...")
-        vrd = VRD(frames=frames, video_path=video_path, model_id="llava-hf/llava-1.5-7b-hf")
+        vrd = VRD(frames=frames, video_path=video_path, api_key=os.getenv("GEMINI_TOKEN"))
         vrd.detect_relationships()
         VRDRepository().save_from_inverted_index(vrd.get_inverted_index(), video_id)
         del vrd
