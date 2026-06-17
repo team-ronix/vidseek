@@ -4,10 +4,10 @@ import numpy as np
 import os
 import joblib
 
-from ovo_svm import OvO_SVM
-from ..utils.Hog import HoG, calc_gradients, predict_char
-from ..utils.MSER import merge_boxes, sort_word_chars, remove_image_border_box, remove_holes, remove_large_boxes
-from ..utils.text_detector import extract_word_images
+from OCR.src.ovo_svm import OvO_SVM
+from OCR.utils.Hog import HoG, calc_gradients, predict_char
+from OCR.utils.MSER import merge_boxes, sort_word_chars, remove_image_border_box, remove_holes, remove_large_boxes
+from OCR.utils.text_detector import extract_word_images
 
 _OCR_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _EAST_MODEL_PATH = os.path.join(_OCR_DIR, 'models', 'frozen_east_text_detection.pb')

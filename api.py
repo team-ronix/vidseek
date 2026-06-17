@@ -1,4 +1,4 @@
-import os
+﻿import os
 import uuid
 import threading
 from pathlib import Path
@@ -42,7 +42,7 @@ app.add_middleware(
 _jobs: dict[str, dict] = {}
 
 
-# ── Pydantic schemas ──────────────────────────────────────────────────────────
+# Pydantic schemas
 
 class SearchResult(BaseModel):
     type: str           # "ocr" | "transcript" | "object" | "vrd"
@@ -50,7 +50,7 @@ class SearchResult(BaseModel):
     video_path: str
     start_time: float
     end_time: float
-    score: float        # distance for ChromaDB results; 1.0 for SQL results
+    sim: float         # similarity score; higher is better
 
 class VideoGroup(BaseModel):
     video_path: str
@@ -141,7 +141,7 @@ def _run_pipeline(job_id: str, video_path: str, video_id: int):
         del seg; gc.collect()
 
         update("Embedding and storing...")
-        transformer = Transformer(ocr_index, transcript_segments, model_id="all-MiniLM-L6-v2")
+        transformer = Transformer(ocr_index, transcript_segments)
         transformer.transform()
         transformer.save_embeddings(CustomVectorStore())
 
@@ -160,7 +160,7 @@ def search(q: str, top_k: int = 10):
     embedding = transformer.transform_single_text(q)
     embedding = embedding.tolist()
     try:
-        ids, metadatas, distances = CustomVectorStore().query(embedding, top_k=top_k)
+        ids, metadatas, flat_similarities = CustomVectorStore().query(embedding, top_k=top_k)
         vector_results = [
             SearchResult(
                 type=meta.get("type", "unknown"),
@@ -168,42 +168,16 @@ def search(q: str, top_k: int = 10):
                 video_path=meta.get("video_path", ""),
                 start_time=float(meta.get("start_time", 0)),
                 end_time=float(meta.get("end_time", 0)),
-                score=float(dist),
+                sim=float(sim),
             )
-            for _, meta, dist in zip(ids[0], metadatas[0], distances[0])
+            for _, meta, sim in zip(ids[0], metadatas[0], flat_similarities[0])
+            if sim > 0.35
         ]
     except Exception as e:
         print(f"Error occurred while querying ChromaDB: {e}")
-        chroma_results = []
-
-    # Postgres: object + VRD keyword hits
-    sql_rows: list[dict] = []
-    try:
-        sql_rows += ObjectRepository().search(q)
-        sql_rows += VRDRepository().search(q)
-    except Exception as e:
-        print(f"Error occurred while searching SQL: {e}")
-        pass
-
-    video_repo = VideoRepository()
-    sql_results = []
-    for row in sql_rows:
-        video_path = row.get("video_path", "")
-        if not video_path and row.get("video_id"):
-            video = video_repo.get_video_by_id(row["video_id"])
-            video_path = video.file_path if video else ""
-        sql_results.append(SearchResult(
-            type=row["type"],
-            text=row["text"],
-            video_path=video_path,
-            start_time=float(row.get("start_time") or 0),
-            end_time=float(row.get("end_time") or 0),
-            score=1.0,
-        ))
-    video_repo.close()
-
-    results = sorted(chroma_results + sql_results, key=lambda r: r.score)
-    return SearchResponse(query=q, results=results, videos=_group_by_video(results))
+        vector_results = []
+        
+    return SearchResponse(query=q, results=vector_results, videos=_group_by_video(vector_results))
 
 @app.post("/videos/upload")
 async def upload_video(file: UploadFile = File(...)):
@@ -238,7 +212,7 @@ def get_job_status(job_id: str):
     return job
 
 
-# ── Object & VRD option endpoints ─────────────────────────────────────────────
+# Object & VRD option endpoints
 
 @app.get("/objects")
 def list_objects():
@@ -288,7 +262,7 @@ def search_by_object(key: str):
                 video_path=video.file_path,
                 start_time=float(ov.start_time or 0),
                 end_time=float(ov.end_time or 0),
-                score=0.0,
+                sim=0.0,
             )
             for ov, obj, video in rows
         ]
@@ -323,11 +297,11 @@ def search_by_vrd(
         results = [
             SearchResult(
                 type="vrd",
-                text=f"{subj.key} — {pred.key} — {obj.key}",
+                text=f"{subj.key} - {pred.key} - {obj.key}",
                 video_path=video.file_path,
                 start_time=float(vrd.start_time or 0),
                 end_time=float(vrd.end_time or 0),
-                score=0.0,
+                sim=0.0,
             )
             for vrd, subj, pred, obj, video in q.all()
         ]

@@ -29,7 +29,7 @@ class CustomVectorStore(VectorStore):
 
         ids_flat = [str(vec_id) for vec_id, _ in hits]
         vector_ids = [vec_id for vec_id, _ in hits]
-        distances_flat = [float(1.0 - sim) for _, sim in hits]
+        flat_similarities = [float(sim) for _, sim in hits]
 
         repo = VectorMetadataRepository()
         try:
@@ -39,4 +39,4 @@ class CustomVectorStore(VectorStore):
 
         metas_flat = [id_to_meta.get(int(vec_id), {}) for vec_id in vector_ids]
 
-        return [ids_flat], [metas_flat], [distances_flat]
+        return [ids_flat], [metas_flat], [flat_similarities]
