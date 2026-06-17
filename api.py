@@ -6,7 +6,7 @@ from typing import Optional
 from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 
 from Transformer import Transformer
@@ -52,9 +52,38 @@ class SearchResult(BaseModel):
     end_time: float
     score: float        # distance for ChromaDB results; 1.0 for SQL results
 
+class VideoGroup(BaseModel):
+    video_path: str
+    video_name: str
+    match_count: int
+    results: list[SearchResult]
+
 class SearchResponse(BaseModel):
     query: str
     results: list[SearchResult]
+    videos: list[VideoGroup]
+
+class GroupedResponse(BaseModel):
+    videos: list[VideoGroup]
+    total_results: int
+
+def _group_by_video(results: list[SearchResult]) -> list[VideoGroup]:
+    groups: dict[str, dict] = {}
+    for r in results:
+        vp = r.video_path
+        if vp not in groups:
+            groups[vp] = {
+                "video_path": vp,
+                "video_name": Path(vp).name,
+                "match_count": 0,
+                "results": [],
+            }
+        groups[vp]["match_count"] += 1
+        groups[vp]["results"].append(r)
+    return [
+        VideoGroup(**g)
+        for g in sorted(groups.values(), key=lambda g: g["match_count"], reverse=True)
+    ]
 
 def _run_pipeline(job_id: str, video_path: str, video_id: int):
     def update(msg: str, status: str = "running"):
@@ -174,7 +203,7 @@ def search(q: str, top_k: int = 10):
     video_repo.close()
 
     results = sorted(chroma_results + sql_results, key=lambda r: r.score)
-    return SearchResponse(query=q, results=results)
+    return SearchResponse(query=q, results=results, videos=_group_by_video(results))
 
 @app.post("/videos/upload")
 async def upload_video(file: UploadFile = File(...)):
@@ -238,7 +267,7 @@ def list_vrd_options():
         db.close()
 
 
-@app.get("/search/object")
+@app.get("/search/object", response_model=GroupedResponse)
 def search_by_object(key: str):
     from Storage.SQL.Models.Object      import Object as ObjectModel
     from Storage.SQL.Models.ObjectVideo import ObjectVideo
@@ -252,22 +281,23 @@ def search_by_object(key: str):
             .filter(ObjectModel.key == key)
             .all()
         )
-        return [
-            {
-                "type":       "object",
-                "text":       obj.key,
-                "video_path": video.file_path,
-                "video_name": video.file_name,
-                "start_time": ov.start_time,
-                "end_time":   ov.end_time,
-            }
+        results = [
+            SearchResult(
+                type="object",
+                text=obj.key,
+                video_path=video.file_path,
+                start_time=float(ov.start_time or 0),
+                end_time=float(ov.end_time or 0),
+                score=0.0,
+            )
             for ov, obj, video in rows
         ]
+        return GroupedResponse(videos=_group_by_video(results), total_results=len(results))
     finally:
         db.close()
 
 
-@app.get("/search/vrd")
+@app.get("/search/vrd", response_model=GroupedResponse)
 def search_by_vrd(
     subject:  Optional[str] = None,
     object:   Optional[str] = None,
@@ -290,16 +320,34 @@ def search_by_vrd(
         if subject:  q = q.filter(VRDSubject.key   == subject)
         if relation: q = q.filter(VRDPredicate.key == relation)
         if object:   q = q.filter(VRDObject.key    == object)
-        return [
-            {
-                "type":       "vrd",
-                "text":       f"{subj.key} — {pred.key} — {obj.key}",
-                "video_path": video.file_path,
-                "video_name": video.file_name,
-                "start_time": vrd.start_time,
-                "end_time":   vrd.end_time,
-            }
+        results = [
+            SearchResult(
+                type="vrd",
+                text=f"{subj.key} — {pred.key} — {obj.key}",
+                video_path=video.file_path,
+                start_time=float(vrd.start_time or 0),
+                end_time=float(vrd.end_time or 0),
+                score=0.0,
+            )
             for vrd, subj, pred, obj, video in q.all()
         ]
+        return GroupedResponse(videos=_group_by_video(results), total_results=len(results))
     finally:
         db.close()
+
+
+@app.get("/video/stream")
+def stream_video(path: str):
+    p = Path(path)
+    if not p.is_absolute():
+        p = Path(".") / p
+    p = p.resolve()
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="Video not found")
+    ext = p.suffix.lower()
+    media_types = {
+        ".mp4": "video/mp4", ".webm": "video/webm",
+        ".avi": "video/x-msvideo", ".mov": "video/quicktime",
+        ".mkv": "video/x-matroska",
+    }
+    return FileResponse(str(p), media_type=media_types.get(ext, "video/mp4"))

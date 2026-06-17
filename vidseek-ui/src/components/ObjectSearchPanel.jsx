@@ -23,8 +23,8 @@ export function ObjectSearchPanel({ onResults, onLoading }) {
     setSearching(true);
     onLoading(true);
     try {
-      const results = await searchByObject(key);
-      onResults(results, key);
+      const data = await searchByObject(key);
+      onResults(data.videos || [], key);
     } catch (e) {
       onResults([], key);
     } finally {
