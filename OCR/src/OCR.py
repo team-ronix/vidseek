@@ -3,6 +3,9 @@ import json
 import numpy as np
 import os
 import joblib
+import sys
+
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from ovo_svm import OvO_SVM
 from ..utils.Hog import HoG, calc_gradients, predict_char
@@ -21,6 +24,7 @@ class OCR:
 
         self.net = cv2.dnn.readNet(_EAST_MODEL_PATH)
         self.mser = cv2.MSER_create()
+        print(f"Loading SVM model from {_SVM_MODEL_DIR}...")
         self.model = OvO_SVM().load(_SVM_MODEL_DIR)
         self.le = joblib.load(os.path.join(_SVM_MODEL_DIR, 'OvO_SVM_label_encoder.joblib'))
 

@@ -1,5 +1,5 @@
 from visual.SceneSegmenter import SceneSegmenter
-from OCR.OCR import OCR
+from OCR.src.OCR import OCR
 from audio.ASR import ASR
 from visual.ObjectDetector import ObjectDetector
 from visual.VRD import VRD
@@ -87,21 +87,21 @@ def run(args):
     gc.collect()
 
     # VRD → Postgres
-    print("\nVisual relationship detection processing...")
-    vrd_processor = VRD(frames=frames, video_path=video_path, api_key=os.getenv("GEMINI_TOKEN"))
-    vrd_processor.detect_relationships()
-    vrd_index_path = os.path.join(json_folder, args.vrd_output_path)
-    vrd_processor.save_inverted_index(vrd_index_path)
-    vrd_inverted_index = vrd_processor.get_inverted_index()
+    # print("\nVisual relationship detection processing...")
+    # vrd_processor = VRD(frames=frames, video_path=video_path, api_key=os.getenv("GEMINI_TOKEN"))
+    # vrd_processor.detect_relationships()
+    # vrd_index_path = os.path.join(json_folder, args.vrd_output_path)
+    # vrd_processor.save_inverted_index(vrd_index_path)
+    # vrd_inverted_index = vrd_processor.get_inverted_index()
 
-    print("Saving VRD results to Postgres...")
-    vrd_repo = VRDRepository()
-    vrd_repo.save_from_inverted_index(vrd_inverted_index, video_id)
+    # print("Saving VRD results to Postgres...")
+    # vrd_repo = VRDRepository()
+    # vrd_repo.save_from_inverted_index(vrd_inverted_index, video_id)
 
-    del vrd_processor
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-    gc.collect()
+    # del vrd_processor
+    # if torch.cuda.is_available():
+    #     torch.cuda.empty_cache()
+    # gc.collect()
 
     # ── 2. Audio Processing ───────────────────────────────────────────────────────
     print("\nAudio transcription processing...")
@@ -141,6 +141,7 @@ def run(args):
 
 
 if __name__ == "__main__":
+    print("Starting video processing pipeline...")
     parser = argparse.ArgumentParser(description="Run the video processing pipeline")
     parser.add_argument("--videos-folder", default="videos",
                         help="Path to videos folder")
