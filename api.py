@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 
 from Transformer import Transformer
-from Storage.ChromaDBVectorStore import ChromaDBVectorStore
+from Storage.CustomVectorStore import CustomVectorStore
 from Storage.SQL.Repositories.VideoRepository import VideoRepository
 from Storage.SQL.Repositories.VRDRepository import VRDRepository
 from Storage.SQL.Repositories.ObjectRepository import ObjectRepository
@@ -143,7 +143,7 @@ def _run_pipeline(job_id: str, video_path: str, video_id: int):
         update("Embedding and storing...")
         transformer = Transformer(ocr_index, transcript_segments, model_id="all-MiniLM-L6-v2")
         transformer.transform()
-        transformer.save_embeddings(ChromaDBVectorStore())
+        transformer.save_embeddings(CustomVectorStore())
 
         update("Done", status="done")
 
@@ -160,8 +160,8 @@ def search(q: str, top_k: int = 10):
     embedding = transformer.transform_single_text(q)
     embedding = embedding.tolist()
     try:
-        ids, metadatas, distances = ChromaDBVectorStore().query(embedding, top_k=top_k)
-        chroma_results = [
+        ids, metadatas, distances = CustomVectorStore().query(embedding, top_k=top_k)
+        vector_results = [
             SearchResult(
                 type=meta.get("type", "unknown"),
                 text=meta.get("text", ""),
