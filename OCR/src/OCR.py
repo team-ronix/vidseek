@@ -3,9 +3,6 @@ import json
 import numpy as np
 import os
 import joblib
-import sys
-
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from ovo_svm import OvO_SVM
 from ..utils.Hog import HoG, calc_gradients, predict_char
@@ -24,7 +21,6 @@ class OCR:
 
         self.net = cv2.dnn.readNet(_EAST_MODEL_PATH)
         self.mser = cv2.MSER_create()
-        print(f"Loading SVM model from {_SVM_MODEL_DIR}...")
         self.model = OvO_SVM().load(_SVM_MODEL_DIR)
         self.le = joblib.load(os.path.join(_SVM_MODEL_DIR, 'OvO_SVM_label_encoder.joblib'))
 
@@ -62,8 +58,6 @@ class OCR:
             features = HoG(orientations, magnitudes)
             predicted_label, confidence = predict_char(features, self.model, self.le)
             text += self.le.inverse_transform(predicted_label)[0]
-            if type(confidence) == np.ndarray or type(confidence) == list:
-                confidence = confidence[0]
             char_confidences.append(float(confidence))
 
         word_text = text.strip().lower()
