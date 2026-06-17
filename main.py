@@ -14,6 +14,9 @@ import sys
 import gc
 import torch
 import argparse
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def run(args):
     videos_folder = args.videos_folder
@@ -87,21 +90,21 @@ def run(args):
     gc.collect()
 
     # VRD → Postgres
-    # print("\nVisual relationship detection processing...")
-    # vrd_processor = VRD(frames=frames, video_path=video_path, api_key=os.getenv("GEMINI_TOKEN"))
-    # vrd_processor.detect_relationships()
-    # vrd_index_path = os.path.join(json_folder, args.vrd_output_path)
-    # vrd_processor.save_inverted_index(vrd_index_path)
-    # vrd_inverted_index = vrd_processor.get_inverted_index()
+    print("\nVisual relationship detection processing...")
+    vrd_processor = VRD(frames=frames, video_path=video_path, api_key=os.getenv("GEMINI_TOKEN"))
+    vrd_processor.detect_relationships()
+    vrd_index_path = os.path.join(json_folder, args.vrd_output_path)
+    vrd_processor.save_inverted_index(vrd_index_path)
+    vrd_inverted_index = vrd_processor.get_inverted_index()
 
-    # print("Saving VRD results to Postgres...")
-    # vrd_repo = VRDRepository()
-    # vrd_repo.save_from_inverted_index(vrd_inverted_index, video_id)
+    print("Saving VRD results to Postgres...")
+    vrd_repo = VRDRepository()
+    vrd_repo.save_from_inverted_index(vrd_inverted_index, video_id)
 
-    # del vrd_processor
-    # if torch.cuda.is_available():
-    #     torch.cuda.empty_cache()
-    # gc.collect()
+    del vrd_processor
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    gc.collect()
 
     # ── 2. Audio Processing ───────────────────────────────────────────────────────
     print("\nAudio transcription processing...")

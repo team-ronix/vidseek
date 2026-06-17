@@ -62,6 +62,8 @@ class OCR:
             features = HoG(orientations, magnitudes)
             predicted_label, confidence = predict_char(features, self.model, self.le)
             text += self.le.inverse_transform(predicted_label)[0]
+            if type(confidence) == np.ndarray or type(confidence) == list:
+                confidence = confidence[0]
             char_confidences.append(float(confidence))
 
         word_text = text.strip().lower()
