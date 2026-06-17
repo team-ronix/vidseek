@@ -20,7 +20,7 @@ import gc
 import torch
 from visual.SceneSegmenter import SceneSegmenter
 from OCR.src.OCR import OCR
-from visual.ObjectDetector import ObjectDetector
+from visual.faster_rcnn.ObjectDetector import ObjectDetector
 from visual.VRD import VRD
 from audio.ASR import ASR
 from audio.SentenceSegmenter import SentenceSegmentation
@@ -77,7 +77,7 @@ def _run_pipeline(job_id: str, video_path: str, video_id: int):
         del ocr; gc.collect()
 
         update("Object detection...")
-        obj_det = ObjectDetector(video_path, frames, model_name="yolo26l.pt")
+        obj_det = ObjectDetector(video_path, frames)
         obj_det.detect_objects()
         ObjectRepository().save_from_inverted_index(obj_det.get_inverted_index(), video_id)
         del obj_det; gc.collect()
