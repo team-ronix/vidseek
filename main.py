@@ -135,7 +135,7 @@ def run(args):
 
     # ── 4. Embed OCR + Transcript → ChromaDB ─────────────────────────────────────
     print("\nEmbedding OCR and transcript results...")
-    transformer = Transformer(ocr_inverted_index, transcript_segments, model_id='all-MiniLM-L6-v2')
+    transformer = Transformer(ocr_inverted_index, transcript_segments)
     transformer.transform()
     transformer.save_embeddings(ChromaDBVectorStore())
 

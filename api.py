@@ -127,9 +127,9 @@ def search(q: str, top_k: int = 10):
     if not q.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty")
 
-    transformer = Transformer({}, [], model_id="all-MiniLM-L6-v2")
+    transformer = Transformer({}, [])
     embedding = transformer.transform_single_text(q)
-
+    embedding = embedding.tolist()
     try:
         ids, metadatas, distances = ChromaDBVectorStore().query(embedding, top_k=top_k)
         chroma_results = [
@@ -143,7 +143,8 @@ def search(q: str, top_k: int = 10):
             )
             for _, meta, dist in zip(ids[0], metadatas[0], distances[0])
         ]
-    except Exception:
+    except Exception as e:
+        print(f"Error occurred while querying ChromaDB: {e}")
         chroma_results = []
 
     # Postgres: object + VRD keyword hits
@@ -151,7 +152,8 @@ def search(q: str, top_k: int = 10):
     try:
         sql_rows += ObjectRepository().search(q)
         sql_rows += VRDRepository().search(q)
-    except Exception:
+    except Exception as e:
+        print(f"Error occurred while searching SQL: {e}")
         pass
 
     video_repo = VideoRepository()
