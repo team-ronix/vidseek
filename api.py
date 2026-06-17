@@ -19,7 +19,7 @@ from Storage.SQL.DatabaseClient import SessionLocal
 import gc
 import torch
 from visual.SceneSegmenter import SceneSegmenter
-from OCR.OCR import OCR
+from OCR.src.OCR import OCR
 from visual.ObjectDetector import ObjectDetector
 from visual.VRD import VRD
 from audio.ASR import ASR
