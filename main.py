@@ -1,4 +1,10 @@
 from visual.SceneSegmenter import SceneSegmenter
+import sys
+import OCR.utils.ovo_svm as ovo_svm
+
+sys.modules["ovo_svm"] = ovo_svm
+
+from visual.SceneSegmenter import SceneSegmenter
 from OCR.src.OCR import OCR
 from audio.ASR import ASR
 from visual.faster_rcnn.ObjectDetector import ObjectDetector
@@ -11,7 +17,6 @@ from Storage.SQL.Repositories.VRDRepository import VRDRepository
 from Storage.SQL.Repositories.ObjectRepository import ObjectRepository
 from Storage.SQL.DatabaseClient import init_db
 import os
-import sys
 import gc
 import torch
 import argparse
