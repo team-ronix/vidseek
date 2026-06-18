@@ -66,7 +66,7 @@ def run(args):
 
     # OCR
     print("\nStarting OCR processing...")
-    ocr_processor = OCR(frames, video_path)
+    ocr_processor = OCR(frames, video_path, video_id)
     ocr_processor.process_frames()
     ocr_index_path = os.path.join(json_folder, args.ocr_output_path)
     ocr_processor.save_inverted_index(ocr_index_path)
