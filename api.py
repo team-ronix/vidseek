@@ -1,4 +1,5 @@
 ﻿import os
+import sys
 import uuid
 import threading
 from pathlib import Path
@@ -8,6 +9,9 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
+import OCR.utils.ovo_svm as ovo_svm
+
+sys.modules["ovo_svm"] = ovo_svm
 
 from Transformer import Transformer
 from Storage.CustomVectorStore import CustomVectorStore
@@ -101,7 +105,7 @@ def _run_pipeline(job_id: str, video_path: str, video_id: int):
         del segmenter; gc.collect()
 
         update("OCR processing...")
-        ocr = OCR(frames, video_path)
+        ocr = OCR(frames, video_path, video_id)
         ocr.process_frames()
         ocr_index = ocr.get_inverted_index()
         del ocr; gc.collect()
@@ -174,37 +178,6 @@ def search(q: str, top_k: int = 10):
             for _, meta, sim in zip(ids[0], metadatas[0], flat_similarities[0])
             if sim > 0.35
         ]
-    except Exception:
-        chroma_results = []
-
-    # Postgres: object + VRD keyword hits
-    sql_rows: list[dict] = []
-    try:
-        sql_rows += ObjectRepository().search(q)
-        sql_rows += VRDRepository().search(q)
-        sql_rows += OCRRepository().search(q)
-    except Exception:
-        pass
-
-    video_repo = VideoRepository()
-    sql_results = []
-    for row in sql_rows:
-        video_path = row.get("video_path", "")
-        if not video_path and row.get("video_id"):
-            video = video_repo.get_video_by_id(row["video_id"])
-            video_path = video.file_path if video else ""
-        sql_results.append(SearchResult(
-            type=row["type"],
-            text=row["text"],
-            video_path=video_path,
-            start_time=float(row.get("start_time") or 0),
-            end_time=float(row.get("end_time") or 0),
-            score=float(row.get("score", 1.0)),
-        ))
-    video_repo.close()
-
-    results = sorted(chroma_results + sql_results, key=lambda r: r.score)
-    return SearchResponse(query=q, results=results)
     except Exception as e:
         print(f"Error occurred while querying ChromaDB: {e}")
         vector_results = []
@@ -293,7 +266,7 @@ def search_by_ocr(q: str, video_id: Optional[int] = None):
         repo.close()
 
 
-@app.get("/search/object")
+
 @app.get("/search/object", response_model=GroupedResponse)
 def search_by_object(key: str):
     from Storage.SQL.Models.Object      import Object as ObjectModel

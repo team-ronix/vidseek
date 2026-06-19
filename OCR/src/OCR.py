@@ -3,6 +3,7 @@ import json
 import numpy as np
 import os
 import joblib
+import sys
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -63,7 +64,7 @@ class OCR:
             features = HoG(orientations, magnitudes)
             predicted_label, confidence = predict_char(features, self.model, self.le)
             text += self.le.inverse_transform(predicted_label)[0]
-            char_confidences.append(float(confidence))
+            #char_confidences.append(float(confidence))
 
         word_text = text.strip().lower()
         word_confidence = float(np.mean(char_confidences)) if char_confidences else 0.0
