@@ -11,7 +11,7 @@ from visual.faster_rcnn.ObjectDetector import ObjectDetector
 from visual.VRD import VRD
 from audio.SentenceSegmenter import SentenceSegmentation
 from Transformer import Transformer
-from Storage.ChromaDBVectorStore import ChromaDBVectorStore
+from Storage.CustomVectorStore import CustomVectorStore
 from Storage.SQL.Repositories.VideoRepository import VideoRepository
 from Storage.SQL.Repositories.VRDRepository import VRDRepository
 from Storage.SQL.Repositories.ObjectRepository import ObjectRepository
@@ -138,11 +138,11 @@ def run(args):
         torch.cuda.empty_cache()
     gc.collect()
 
-    # ── 4. Embed OCR + Transcript → ChromaDB ─────────────────────────────────────
+    # ── 4. Embed OCR + Transcript → custom IVF store ─────────────────────────────
     print("\nEmbedding OCR and transcript results...")
-    transformer = Transformer(ocr_inverted_index, transcript_segments, model_id='all-MiniLM-L6-v2')
+    transformer = Transformer(ocr_inverted_index, transcript_segments)
     transformer.transform()
-    transformer.save_embeddings(ChromaDBVectorStore())
+    transformer.save_embeddings(CustomVectorStore())
 
     print(f"Generated {len(transformer.get_embeddings())} total embeddings")
     print("\nPipeline completed successfully!")

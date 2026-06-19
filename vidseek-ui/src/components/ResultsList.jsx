@@ -1,6 +1,10 @@
-import { ResultCard } from './ResultCard';
+import { useState } from 'react';
+import { VideoCard }   from './VideoCard';
+import { VideoPlayer } from './VideoPlayer';
 
-export function ResultsList({ results, query, loading, error }) {
+export function ResultsList({ videos, query, loading, error }) {
+  const [selectedVideo, setSelectedVideo] = useState(null);
+
   if (loading) return (
     <div className="state-panel">
       <div className="state-glyph pulse">⊙</div>
@@ -16,20 +20,37 @@ export function ResultsList({ results, query, loading, error }) {
     </div>
   );
 
-  if (!results.length) return (
+  if (!videos || !videos.length) return (
     <div className="state-panel">
       <div className="state-glyph">∅</div>
       <p>No matches found{query ? ` for "${query}"` : ''}.</p>
     </div>
   );
 
+  if (selectedVideo) {
+    return (
+      <VideoPlayer
+        video={selectedVideo}
+        onBack={() => setSelectedVideo(null)}
+      />
+    );
+  }
+
+  const totalMatches = videos.reduce((sum, v) => sum + v.match_count, 0);
+
   return (
     <div className="results-list">
       <p className="results-count">
-        <strong>{results.length}</strong> result{results.length !== 1 ? 's' : ''}
+        <strong>{videos.length}</strong> video{videos.length !== 1 ? 's' : ''} &nbsp;·&nbsp;
+        <strong>{totalMatches}</strong> total match{totalMatches !== 1 ? 'es' : ''}
       </p>
-      {results.map((r, i) => (
-        <ResultCard key={`${r.type}-${i}`} result={r} index={i} />
+      {videos.map((v, i) => (
+        <VideoCard
+          key={v.video_path}
+          video={v}
+          index={i}
+          onClick={setSelectedVideo}
+        />
       ))}
     </div>
   );

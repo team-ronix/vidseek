@@ -9,18 +9,18 @@ import { UploadPanel }       from './components/UploadPanel';
 import { useSearch }         from './hooks/useSearch';
 
 export default function App() {
-  const { results, loading, error, query, search, changeSource } = useSearch();
+  const { videos, loading, error, query, search, changeSource } = useSearch();
 
   const [uploadOpen,  setUploadOpen]  = useState(false);
   const [activeMode,  setActiveMode]  = useState(null);    // 'text' | 'object' | 'vrd'
-  const [sideResults, setSideResults] = useState([]);
+  const [sideVideos,  setSideVideos]  = useState([]);
   const [sideQuery,   setSideQuery]   = useState(null);
   const [sideLoading, setSideLoading] = useState(false);
 
-  const activeResults = activeMode === 'text' ? results      : sideResults;
-  const activeLoading = activeMode === 'text' ? loading      : sideLoading;
-  const activeError   = activeMode === 'text' ? error        : null;
-  const activeQuery   = activeMode === 'text' ? query        : sideQuery;
+  const activeVideos  = activeMode === 'text' ? videos      : sideVideos;
+  const activeLoading = activeMode === 'text' ? loading     : sideLoading;
+  const activeError   = activeMode === 'text' ? error       : null;
+  const activeQuery   = activeMode === 'text' ? query       : sideQuery;
 
   const handleTextSearch = q => {
     if (q.trim()) setActiveMode('text');
@@ -28,9 +28,9 @@ export default function App() {
     search(q);
   };
 
-  const handleSideResults = (mode, res, label) => {
+  const handleSideResults = (mode, videoGroups, label) => {
     setActiveMode(mode);
-    setSideResults(res);
+    setSideVideos(videoGroups);
     setSideQuery(label);
   };
 
@@ -69,11 +69,11 @@ export default function App() {
       {/* Object + VRD panels */}
       <div className="panels-row">
         <ObjectSearchPanel
-          onResults={(res, label) => handleSideResults('object', res, label)}
+          onResults={(videoGroups, label) => handleSideResults('object', videoGroups, label)}
           onLoading={v => { setSideLoading(v); if (v) setActiveMode('object'); }}
         />
         <VRDSearchPanel
-          onResults={(res, label) => handleSideResults('vrd', res, label)}
+          onResults={(videoGroups, label) => handleSideResults('vrd', videoGroups, label)}
           onLoading={v => { setSideLoading(v); if (v) setActiveMode('vrd'); }}
         />
       </div>
@@ -88,7 +88,8 @@ export default function App() {
             )}
           </div>
           <ResultsList
-            results={activeResults}
+            key={`${activeMode}||${activeQuery}`}
+            videos={activeVideos}
             query={activeQuery}
             loading={activeLoading}
             error={activeError}
