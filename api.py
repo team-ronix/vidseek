@@ -14,6 +14,7 @@ from Storage.ChromaDBVectorStore import ChromaDBVectorStore
 from Storage.SQL.Repositories.VideoRepository import VideoRepository
 from Storage.SQL.Repositories.VRDRepository import VRDRepository
 from Storage.SQL.Repositories.ObjectRepository import ObjectRepository
+from Storage.SQL.Repositories.OCRRepository import OCRRepository
 from Storage.SQL.DatabaseClient import SessionLocal
 
 import gc
@@ -151,6 +152,7 @@ def search(q: str, top_k: int = 10):
     try:
         sql_rows += ObjectRepository().search(q)
         sql_rows += VRDRepository().search(q)
+        sql_rows += OCRRepository().search(q)
     except Exception:
         pass
 
@@ -167,7 +169,7 @@ def search(q: str, top_k: int = 10):
             video_path=video_path,
             start_time=float(row.get("start_time") or 0),
             end_time=float(row.get("end_time") or 0),
-            score=1.0,
+            score=float(row.get("score", 1.0)),
         ))
     video_repo.close()
 
@@ -234,6 +236,26 @@ def list_vrd_options():
         }
     finally:
         db.close()
+
+
+@app.get("/search/ocr")
+def search_by_ocr(q: str, video_id: Optional[int] = None):
+    repo = OCRRepository()
+    try:
+        word, confidence = repo.find_closest_word_video(q, video_id)
+        if word is None:
+            return []
+        return [{
+            "type": "ocr",
+            "text": word.word,
+            "video_path": word.video.file_path,
+            "video_name": word.video.file_name,
+            "start_time": word.start_time,
+            "end_time": word.end_time,
+            "score": confidence,
+        }]
+    finally:
+        repo.close()
 
 
 @app.get("/search/object")
