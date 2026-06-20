@@ -32,8 +32,12 @@ class OCR:
 
     def _recognize_word(self, word_img):
         gray = cv2.cvtColor(word_img, cv2.COLOR_BGR2GRAY)
-        _, boxes = self.mser.detectRegions(gray)
+        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        if np.sum(binary == 0) > np.sum(binary == 255):
+            binary = cv2.bitwise_not(binary)
 
+        _, boxes = self.mser.detectRegions(binary)
+        unique_boxes = set(tuple(b) for b in boxes)
         unique_boxes = list({tuple(b) for b in boxes})
         unique_boxes = merge_boxes(unique_boxes, threshold=0.3)
         unique_boxes = sort_word_chars(unique_boxes)
@@ -85,7 +89,7 @@ class OCR:
 
             if frame is not None:
                 print("Running OCR...")
-                word_images = extract_word_images(frame, self.net)
+                word_images = extract_word_images(frame, self.net, pad=0)
                 print(f"Detected {len(word_images)} word regions")
 
                 for word_img in word_images:
