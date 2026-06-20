@@ -16,7 +16,7 @@ class ObjectDetector:
         self.inverted_index = {}
         NUM_CLASSES = len(VOC_CLASSES)
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model = FasterRCNN(num_classes=NUM_CLASSES, score_thresh=score_thresh).to(self.device)
+        self.model = FasterRCNN(num_classes=NUM_CLASSES, score_thresh=score_thresh, pretrained=False).to(self.device)
         if not os.path.exists(_FASTER_RCNN_MODEL_PATH):
             raise ValueError("Model file does not exist")
         self.model.load_state_dict(torch.load(_FASTER_RCNN_MODEL_PATH, map_location=self.device))
