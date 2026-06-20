@@ -26,7 +26,7 @@ def infer(args):
         raise ValueError("Image path is not specified or file does not exist")
     img = Image.open(args.image_path).convert("RGB")
     img, scale = process_img(img)
-    model = FasterRCNN(num_classes=NUM_CLASSES, score_thresh=args.score_thresh).to(DEVICE)
+    model = FasterRCNN(num_classes=NUM_CLASSES, score_thresh=args.score_thresh, pretrained=False).to(DEVICE)
     if args.model_path is None or not os.path.exists(args.model_path):
         raise ValueError("Model path is not specified or file does not exist")
     model.load_state_dict(torch.load(args.model_path, map_location=DEVICE))
