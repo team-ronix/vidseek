@@ -2,6 +2,7 @@ import json
 import math
 import os
 import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -98,7 +99,18 @@ class TwoLevelIVFIndex:
         tmp = path.with_suffix(path.suffix + ".tmp")
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=True)
-        os.replace(tmp, path)
+        self._replace(tmp, path)
+
+    def _replace(self, src: Path, dst: Path) -> None:
+        # Windows can hold a transient lock on newly written files (e.g. Defender scan),
+        # causing os.replace to raise PermissionError. Retry with backoff.
+        for attempt in range(10):
+            try:
+                os.replace(src, dst)
+                return
+            except PermissionError:
+                time.sleep(0.01 * (attempt + 1))
+        os.replace(src, dst)
 
     @property
     def dimension(self) -> int:
@@ -120,7 +132,7 @@ class TwoLevelIVFIndex:
         values = np.asarray(values, dtype=np.float32)
         tmp = path.with_suffix(path.suffix + ".tmp")
         values.tofile(tmp)
-        os.replace(tmp, path)
+        self._replace(tmp, path)
 
     def _normalize(self, x: np.ndarray) -> np.ndarray:
         norm = np.linalg.norm(x)

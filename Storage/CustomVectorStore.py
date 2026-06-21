@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import numpy as np
+
 from .VectorStore import VectorStore, VideoVector
 from .IVF.two_level_index import TwoLevelIVFIndex
 from Storage.SQL.Repositories.VectorMetadataRepository import VectorMetadataRepository
@@ -25,7 +27,7 @@ class CustomVectorStore(VectorStore):
             repo.close()
 
     def query(self, query_embedding: list[float], top_k: int = 5):
-        hits = self.index.query(query_embedding, top_k=top_k)
+        hits = self.index.query(np.array(query_embedding, dtype=np.float32), top_k=top_k)
 
         ids_flat = [str(vec_id) for vec_id, _ in hits]
         vector_ids = [vec_id for vec_id, _ in hits]
