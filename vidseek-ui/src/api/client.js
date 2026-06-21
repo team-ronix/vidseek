@@ -15,6 +15,10 @@ export async function searchVideos(query, topK = 20) {
   return request(`/search?q=${encodeURIComponent(query)}&top_k=${topK}`);
 }
 
+export async function searchByOCR(query) {
+  return request(`/search/ocr?q=${encodeURIComponent(query)}`);
+}
+
 // ── Structured search ─────────────────────────────────────────
 export async function searchByObject(objectKey) {
   return request(`/search/object?key=${encodeURIComponent(objectKey)}`);

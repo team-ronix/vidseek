@@ -26,6 +26,7 @@ from Storage.SQL.Models.VRDPredicate import VRDPredicate    # noqa: F401
 from Storage.SQL.Models.VRDObject import VRDObject          # noqa: F401
 from Storage.SQL.Models.VRDVideo import VRDVideo            # noqa: F401
 from Storage.SQL.Models.VectorMetadata import VectorMetadata # noqa: F401
+from Storage.SQL.Models.OCRWords import OCRWord             # noqa: F401
 
 target_metadata = Base.metadata
 

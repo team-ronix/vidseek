@@ -1,5 +1,5 @@
-import { useState, useCallback, useRef } from 'react';
-import { searchVideos } from '../api/client';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { searchVideos, searchByOCR } from '../api/client';
 
 export function useSearch() {
   const [rawResults,   setRawResults]   = useState([]);
@@ -10,17 +10,27 @@ export function useSearch() {
   const [sourceFilter, setSourceFilter] = useState('all');
   const debounceRef = useRef(null);
 
-  const search = useCallback(q => {
-    setQuery(q);
+  useEffect(() => {
     clearTimeout(debounceRef.current);
-    if (!q.trim()) { setRawResults([]); setRawVideos([]); setError(null); return; }
+    if (!query.trim()) {
+      setRawResults([]);
+      setRawVideos([]);
+      setError(null);
+      return;
+    }
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       setError(null);
       try {
-        const data = await searchVideos(q);
-        setRawResults(data.results || []);
-        setRawVideos(data.videos || []);
+        if (sourceFilter === 'ocr') {
+          const data = await searchByOCR(query);
+          setRawResults(data || []);
+          setRawVideos([]);
+        } else {
+          const data = await searchVideos(query);
+          setRawResults(data.results || []);
+          setRawVideos(data.videos || []);
+        }
       } catch (e) {
         setError(e.message);
         setRawResults([]);
@@ -29,8 +39,11 @@ export function useSearch() {
         setLoading(false);
       }
     }, 320);
-  }, []);
 
+    return () => clearTimeout(debounceRef.current);
+  }, [query, sourceFilter]);
+
+  const search = useCallback(q => setQuery(q), []);
   const changeSource = useCallback(src => setSourceFilter(src), []);
 
   const videos = sourceFilter === 'all'

@@ -26,6 +26,7 @@ class OCR:
 
         self.net = cv2.dnn.readNet(_EAST_MODEL_PATH)
         self.mser = cv2.MSER_create()
+        self.mser.setMinArea(100)
         self.model = OvO_SVM().load(_SVM_MODEL_DIR)
         self.le = joblib.load(os.path.join(_SVM_MODEL_DIR, 'OvO_SVM_label_encoder.joblib'))
         self._ocr_repo = OCRRepository()
