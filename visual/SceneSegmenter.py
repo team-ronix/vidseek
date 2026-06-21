@@ -271,6 +271,7 @@ class SceneSegmenter:
 
         self.middleFrames = []
         cap = cv2.VideoCapture(self.video_path)
+        fps = cap.get(cv2.CAP_PROP_FPS)
 
         if not cap.isOpened():
             print(f"Error: could not open {self.video_path}")
@@ -281,10 +282,12 @@ class SceneSegmenter:
             for frame_num in frame_numbers:
                 cap.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
                 ret, frame = cap.read()
+                
                 if ret:
                     self.middleFrames.append({
                         'scene_index': scene.index,
                         'frame_number': frame_num,
+                        'frame_time': frame_num / fps,
                         'frame': frame,
                         'scene': scene,
                         'frame_count_in_scene': len(frame_numbers),

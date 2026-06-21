@@ -54,6 +54,7 @@ class ObjectDetector:
     def detect_objects(self):
         for i, frame_data in enumerate(self.frames, 1):
             frame_number = frame_data['frame_number']
+            frame_time = frame_data['frame_time']
             scene = frame_data['scene']
             frame_count = frame_data['frame_count_in_scene']
             frame = frame_data['frame']
@@ -80,6 +81,7 @@ class ObjectDetector:
                             'scene': scene.index,
                             'frame': frame_number,
                             'video_path': self.video_path,
+                            "frame_time": frame_time,
                             'start_time': scene.start_time,
                             'end_time': scene.end_time,
                             'confidence': float(conf)

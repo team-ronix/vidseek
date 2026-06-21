@@ -67,7 +67,7 @@ class ASR:
         audio = self.get_audio()
 
         with torch.no_grad():
-            with torch.cuda.amp.autocast(enabled=(self.device == "cuda:0")):
+            with torch.amp.autocast('cuda', enabled=(self.device == "cuda:0")):
                 self.result = self.pipe(
                     audio,
                     chunk_length_s=20,  

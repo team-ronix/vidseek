@@ -14,7 +14,7 @@ export function VideoPlayer({ video, onBack }) {
 
   const seekTo = (startTime) => {
     if (!videoRef.current) return;
-    videoRef.current.currentTime = startTime;
+  videoRef.current.currentTime = startTime;
     videoRef.current.play();
   };
 
@@ -46,8 +46,8 @@ export function VideoPlayer({ video, onBack }) {
             <button
               key={i}
               className="video-result-item"
-              onClick={() => seekTo(r.start_time)}
-              title={`Seek to ${start}`}
+              onClick={() => seekTo(r.frame_time || r.start_time)}
+              title={`Seek to ${r.frame_time  }`}
             >
               <span className={`type-badge type-${r.type}`}>{r.type}</span>
               <span className="video-result-text">{r.text}</span>

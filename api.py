@@ -54,6 +54,7 @@ class SearchResult(BaseModel):
     text: str
     video_path: str
     start_time: float
+    frame_time: Optional[float] = None
     end_time: float
     sim: float         # similarity score; higher is better
 
@@ -176,7 +177,7 @@ def search(q: str, top_k: int = 10):
                 sim=float(sim),
             )
             for _, meta, sim in zip(ids[0], metadatas[0], flat_similarities[0])
-            if sim > 0.35
+            if sim > 0.1
         ]
     except Exception as e:
         print(f"Error occurred while querying ChromaDB: {e}")
@@ -286,6 +287,7 @@ def search_by_object(key: str):
                 type="object",
                 text=obj.key,
                 video_path=video.file_path,
+                frame_time=float(ov.frame_time or 0),
                 start_time=float(ov.start_time or 0),
                 end_time=float(ov.end_time or 0),
                 sim=0.0,
