@@ -126,3 +126,6 @@ Transformer/**/*.pt
 Transformer/**/*.pkl
 
 *.pth
+
+visual/**/*.pkl
+visual/**/*.npy
