@@ -1,0 +1,11 @@
+
+{
+	"model_dir": "./model",
+	"image": null,
+	"threshold": 0.5,
+	"nms_thresh": 0.3,
+	"pyramid_lambda": null,
+	"no_context": false,
+	"output": "./result.jpg",
+	"json": false
+}
