@@ -15,6 +15,7 @@ sys.modules["ovo_svm"] = ovo_svm
 
 from Transformer import Transformer
 from Storage.CustomVectorStore import CustomVectorStore
+from Storage.HNSW import HNSWVectorStore
 from Storage.SQL.Repositories.VideoRepository import VideoRepository
 from Storage.SQL.Repositories.VRDRepository import VRDRepository
 from Storage.SQL.Repositories.ObjectRepository import ObjectRepository
@@ -149,7 +150,9 @@ def _run_pipeline(job_id: str, video_path: str, video_id: int):
         update("Embedding and storing...")
         transformer = Transformer(ocr_index, transcript_segments)
         transformer.transform()
-        transformer.save_embeddings(CustomVectorStore())
+        hnsw_store = HNSWVectorStore()
+        transformer.save_embeddings(hnsw_store)
+        hnsw_store.commit()  # flush vectors + graph to disk atomically
 
         update("Done", status="done")
 
@@ -166,7 +169,7 @@ def search(q: str, top_k: int = 10):
     embedding = transformer.transform_single_text(q)
     embedding = embedding.tolist()
     try:
-        ids, metadatas, flat_similarities = CustomVectorStore().query(embedding, top_k=top_k)
+        ids, metadatas, flat_similarities = HNSWVectorStore().query(embedding, top_k=top_k)
         vector_results = [
             SearchResult(
                 type=meta.get("type", "unknown"),
@@ -177,7 +180,7 @@ def search(q: str, top_k: int = 10):
                 sim=float(sim),
             )
             for _, meta, sim in zip(ids[0], metadatas[0], flat_similarities[0])
-            if sim > 0.1
+            if sim > 0.5
         ]
     except Exception as e:
         print(f"Error occurred while querying ChromaDB: {e}")
@@ -329,6 +332,7 @@ def search_by_vrd(
                 video_path=video.file_path,
                 start_time=float(vrd.start_time or 0),
                 end_time=float(vrd.end_time or 0),
+                frame_time=float(vrd.frame_time or 0), 
                 sim=0.0,
             )
             for vrd, subj, pred, obj, video in q.all()

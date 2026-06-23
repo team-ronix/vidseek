@@ -28,10 +28,10 @@ class TwoLevelIVFIndex:
         dimension: int | None = None,
         max_level1_clusters: int = 500,
         max_level2_per_level1: int = 20,
-        level1_probes: int = 12,
-        level2_probes: int = 6,
-        new_level1_threshold: float = 0.62,
-        new_level2_threshold: float = 0.78,
+        level1_probes: int | None = None,
+        level2_probes: int | None = None,
+        new_level1_threshold: float | None = None,
+        new_level2_threshold: float | None = None,
     ) -> None:
         self.root_dir = Path(root_dir)
         self.postings_dir = self.root_dir / "postings"
@@ -46,10 +46,10 @@ class TwoLevelIVFIndex:
 
         self.max_level1_clusters = max_level1_clusters
         self.max_level2_per_level1 = max_level2_per_level1
-        self.level1_probes = level1_probes
-        self.level2_probes = level2_probes
-        self.new_level1_threshold = new_level1_threshold
-        self.new_level2_threshold = new_level2_threshold
+        self._level1_probes = level1_probes
+        self._level2_probes = level2_probes
+        self._new_level1_threshold = new_level1_threshold
+        self._new_level2_threshold = new_level2_threshold
 
         self._lock = threading.Lock()
         self._ensure_bootstrap(dimension=dimension)
@@ -134,6 +134,37 @@ class TwoLevelIVFIndex:
         values.tofile(tmp)
         self._replace(tmp, path)
 
+    def _get_thresholds(self) -> tuple[float, float]:
+        """
+        Return (l1_threshold, l2_threshold).
+        Uses constructor values when provided; otherwise falls back to adaptive schedule.
+        Adaptive: loosens as index grows → finer granularity at scale.
+          l1: 0.72 → ~0.52 floor  |  l2: 0.85 → ~0.68 floor
+        """
+        if self._new_level1_threshold is not None and self._new_level2_threshold is not None:
+            return self._new_level1_threshold, self._new_level2_threshold
+        n = max(10, self.vector_count)
+        scale = math.log10(n / 10)
+        l1 = max(0.52, 0.72 - 0.04 * scale)
+        l2 = max(0.68, 0.85 - 0.04 * scale)
+        return l1, l2
+
+    def _get_probes(self, n_l1: int, layout: dict) -> tuple[int, int]:
+        """
+        Return (l1_probes, l2_probes).
+        Uses constructor values when provided; otherwise scales with sqrt of cluster counts.
+        """
+        if self._level1_probes is not None and self._level2_probes is not None:
+            return (
+                min(self._level1_probes, n_l1),
+                self._level2_probes,
+            )
+        n_l2_total = sum(len(v) for v in layout["level1_to_level2"])
+        avg_l2 = n_l2_total / max(1, n_l1)
+        l1_probes = max(1, min(n_l1, math.ceil(math.sqrt(n_l1))))
+        l2_probes = max(1, min(int(avg_l2), math.ceil(math.sqrt(avg_l2))))
+        return l1_probes, l2_probes
+
     def _normalize(self, x: np.ndarray) -> np.ndarray:
         norm = np.linalg.norm(x)
         if norm == 0:
@@ -198,8 +229,9 @@ class TwoLevelIVFIndex:
             best_level1 = int(np.argmax(level1_scores))
             best_level1_score = float(level1_scores[best_level1])
 
+            l1_thresh, l2_thresh = self._get_thresholds()
             can_create_l1 = len(layout["level1_to_level2"]) < self.max_level1_clusters
-            if best_level1_score < self.new_level1_threshold and can_create_l1:
+            if best_level1_score < l1_thresh and can_create_l1:
                 new_level1_id = int(level1.shape[0])
                 level1 = np.vstack([level1, vec.reshape(1, -1)])
                 level2 = np.vstack([level2, vec.reshape(1, -1)])
@@ -228,7 +260,7 @@ class TwoLevelIVFIndex:
                 chosen_level2 = int(level2_ids[local_best])
 
                 can_create_l2 = len(level2_ids) < self.max_level2_per_level1
-                if best_level2_score < self.new_level2_threshold and can_create_l2:
+                if best_level2_score < l2_thresh and can_create_l2:
                     level2 = np.vstack([level2, vec.reshape(1, -1)])
                     chosen_level2 = int(level2.shape[0] - 1)
                     layout["level1_to_level2"][best_level1].append(chosen_level2)
@@ -286,8 +318,9 @@ class TwoLevelIVFIndex:
         if level1.shape[0] == 0:
             return []
 
+        l1_probes, l2_probes = self._get_probes(level1.shape[0], layout)
         level1_scores = level1 @ vec
-        n_l1 = min(self.level1_probes, level1.shape[0])
+        n_l1 = min(l1_probes, level1.shape[0])
         if n_l1 < level1.shape[0]:
             top_l1 = np.argpartition(level1_scores, -n_l1)[-n_l1:]
             top_l1 = top_l1[np.argsort(level1_scores[top_l1])[::-1]]
@@ -301,7 +334,7 @@ class TwoLevelIVFIndex:
                 continue
             l2_arr = np.asarray(level2_ids, dtype=np.int64)
             l2_scores = level2[l2_arr] @ vec
-            n_l2 = min(self.level2_probes, len(level2_ids))
+            n_l2 = min(l2_probes, len(level2_ids))
             if n_l2 < len(level2_ids):
                 top_l2_local = np.argpartition(l2_scores, -n_l2)[-n_l2:]
                 top_l2_local = top_l2_local[np.argsort(l2_scores[top_l2_local])[::-1]]

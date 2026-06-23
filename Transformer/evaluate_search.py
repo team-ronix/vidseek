@@ -2,9 +2,9 @@
 
 Metrics
 ───────
-Recall@K      — fraction of queries where the true positive is in the top-K results
-MRR@K         — Mean Reciprocal Rank: mean(1 / rank_of_first_hit)
-Spearman ρ    — rank correlation between cosine similarity and gold STS scores
+Recall@K      - fraction of queries where the true positive is in the top-K results
+MRR@K         - Mean Reciprocal Rank: mean(1 / rank_of_first_hit)
+Spearman ρ    - rank correlation between cosine similarity and gold STS scores
 
 Hard negative mining
 ────────────────────
@@ -142,7 +142,7 @@ def mine_hard_negatives(
 
     Why hard negatives improve training
     ────────────────────────────────────
-    Random negatives are easy — the model quickly separates them and gets no
+    Random negatives are easy - the model quickly separates them and gets no
     gradient. Hard negatives are sentences the model *currently* thinks are
     similar to the anchor but shouldn't be. Training on them forces the model
     to make finer-grained distinctions, which directly improves retrieval
@@ -161,7 +161,7 @@ def mine_hard_negatives(
     })
     sent_to_idx = {s: i for i, s in enumerate(all_sentences)}
 
-    print(f"Mining hard negatives — encoding {len(all_sentences)} sentences ...")
+    print(f"Mining hard negatives - encoding {len(all_sentences)} sentences ...")
     corpus_embs = encode_sentences(model, all_sentences, vocab, max_len, batch_size, device)
 
     # Build anchor → known positives map
@@ -318,7 +318,7 @@ if __name__ == "__main__":
     # 3. Load training data to mine hard negatives from
     train_df = pd.read_csv(CONFIG["train_path"])
 
-    # 4. Run hard negative mining — finds triplets the model currently gets wrong
+    # 4. Run hard negative mining - finds triplets the model currently gets wrong
     hard_triplets_df = mine_hard_negatives(
         model=model,
         df=train_df,

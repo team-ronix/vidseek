@@ -54,7 +54,7 @@ export function VRDSearchPanel({ onResults, onLoading }) {
     onLoading(true);
     try {
       const data = await searchByVRD({ subject: s, relation: r, object: o });
-      onResults(data.videos || [], `${s || '?'} — ${r || '?'} — ${o || '?'}`);
+      onResults(data.videos || [], `${s || '?'} - ${r || '?'} - ${o || '?'}`);
     } catch (e) {
       onResults([], null);
     } finally {

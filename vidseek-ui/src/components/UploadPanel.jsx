@@ -69,7 +69,7 @@ export function UploadPanel() {
       {isDone && (
         <div className="upload-done">
           <CheckCircle size={15} className="done-icon" />
-          <span>Video processed — ready to search.</span>
+          <span>Video processed - ready to search.</span>
           <button className="upload-reset" onClick={reset}>Upload another</button>
         </div>
       )}

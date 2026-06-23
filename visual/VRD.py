@@ -28,9 +28,11 @@ class VRD:
             "The available predicates are [sitting on, standing on, next to, under, above, holding, looking at, running]. "
             "For example: [Dog, sitting on, Couch]. "
             "List only the triplets, one per line, nothing else."
+            "Don't return anything other than the triplets if none exists return empty string"
         )
         for i, frame_data in enumerate(self.frames, 1):
             frame_number = frame_data['frame_number']
+            frame_time = frame_data['frame_time']
             scene = frame_data['scene']
             frame_count = frame_data['frame_count_in_scene']
             frame = frame_data['frame']
@@ -49,13 +51,23 @@ class VRD:
                 for attempt in range(4):
                     try:
                         response = self.model.generate_content([prompt, image])
-                        output = response.text
+                        
+                        if response.candidates:
+                            parts = response.candidates[0].content.parts
+
+                            if parts and hasattr(parts[0], "text"):
+                                output = parts[0].text
+                            else:
+                                output = None
+                        else:
+                            output = None
+
                         break
                     except Exception as e:
                         msg = str(e).lower()
                         if "429" in msg or "quota" in msg or "resource exhausted" in msg:
-                            wait = 2 ** attempt
-                            print(f"       - Rate limited, retrying in {wait}s (attempt {attempt + 1}/4)")
+                            wait = 60
+                            print(f"       - Rate limited, retrying in {wait}s ")
                             time.sleep(wait)
                         else:
                             print(f"       - Gemini error for frame {frame_number}: {e}")
@@ -89,6 +101,7 @@ class VRD:
                         'scene': scene.index,
                         'frame': frame_number,
                         'video_path': self.video_path,
+                        'frame_time': frame_time,
                         'start_time': scene.start_time,
                         'end_time': scene.end_time
                     })

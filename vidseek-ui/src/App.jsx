@@ -78,7 +78,7 @@ export default function App() {
         />
       </div>
 
-      {/* Results — only shown once a search has run */}
+      {/* Results - only shown once a search has run */}
       {(activeMode || activeLoading) && (
         <div className="results-section">
           <div className="results-section-header">

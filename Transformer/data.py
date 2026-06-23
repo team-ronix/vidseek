@@ -102,7 +102,7 @@ class STSDataset(Dataset):
         )
 
 
-# ── Sentence pair dataset — for Multiple Negatives Ranking Loss ───────────────
+# ── Sentence pair dataset - for Multiple Negatives Ranking Loss ───────────────
 
 class SentencePairDataset(Dataset):
     """Positive sentence pairs for MNR Loss training.
@@ -150,7 +150,7 @@ class SentencePairDataset(Dataset):
         )
 
 
-# ── Triplet dataset — for TripletLoss (alternative to MNR) ───────────────────
+# ── Triplet dataset - for TripletLoss (alternative to MNR) ───────────────────
 
 class TripletDataset(Dataset):
     """(anchor, positive, negative) triplets built from STS pair data.
@@ -167,7 +167,7 @@ class TripletDataset(Dataset):
     ────────────────────
     After initial training, replace random negatives with hard negatives by
     calling mine_hard_negatives() from evaluate_search.py.  Hard negatives
-    are sentences the model incorrectly scores as similar — they provide the
+    are sentences the model incorrectly scores as similar - they provide the
     strongest gradient signal.
     """
 
@@ -233,7 +233,7 @@ class TripletDataset(Dataset):
 # ── collate functions ─────────────────────────────────────────────────────────
 
 def collate_fn(batch):
-    """Collate for STSDataset — returns (ids_a, ids_b, mask_a, mask_b, scores)."""
+    """Collate for STSDataset - returns (ids_a, ids_b, mask_a, mask_b, scores)."""
     seqs_a, seqs_b, scores = zip(*batch)
     padded_a = pad_sequence(list(seqs_a), batch_first=True, padding_value=0)
     padded_b = pad_sequence(list(seqs_b), batch_first=True, padding_value=0)
@@ -245,7 +245,7 @@ def collate_fn(batch):
 
 
 def collate_pair_fn(batch):
-    """Collate for SentencePairDataset — returns (ids_a, ids_b, mask_a, mask_b)."""
+    """Collate for SentencePairDataset - returns (ids_a, ids_b, mask_a, mask_b)."""
     seqs_a, seqs_b = zip(*batch)
     padded_a = pad_sequence(list(seqs_a), batch_first=True, padding_value=0)
     padded_b = pad_sequence(list(seqs_b), batch_first=True, padding_value=0)
@@ -256,7 +256,7 @@ def collate_pair_fn(batch):
 
 
 def collate_triplet_fn(batch):
-    """Collate for TripletDataset — returns (a, p, n, mask_a, mask_p, mask_n)."""
+    """Collate for TripletDataset - returns (a, p, n, mask_a, mask_p, mask_n)."""
     seqs_a, seqs_p, seqs_n = zip(*batch)
     padded_a = pad_sequence(list(seqs_a), batch_first=True, padding_value=0)
     padded_p = pad_sequence(list(seqs_p), batch_first=True, padding_value=0)

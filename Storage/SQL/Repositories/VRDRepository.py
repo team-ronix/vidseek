@@ -41,8 +41,7 @@ class VRDRepository:
                             VRDVideo.predicate_id == predicate.id,
                             VRDVideo.object_id    == obj.id,
                             VRDVideo.video_id     == video_id,
-                            VRDVideo.start_time   == occ.get("start_time"),
-                            VRDVideo.end_time     == occ.get("end_time"),
+                            VRDVideo.frame_time   == occ.get("frame_time"),
                         ).first()
                     )
                     if exists:
@@ -53,6 +52,7 @@ class VRDRepository:
                         object_id=obj.id,
                         video_id=video_id,
                         start_time=occ.get("start_time"),
+                        frame_time=occ.get("frame_time"),
                         end_time=occ.get("end_time"),
                     ))
             self.db.commit()
@@ -82,6 +82,7 @@ class VRDRepository:
                 "text":       f"{subj.key}, {pred.key}, {obj.key}",
                 "video_id":   vrd.video_id,
                 "start_time": vrd.start_time,
+                "frame_time" : vrd.frame_time,
                 "end_time":   vrd.end_time,
             }
             for vrd, subj, pred, obj in rows

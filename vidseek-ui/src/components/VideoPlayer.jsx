@@ -37,7 +37,7 @@ export function VideoPlayer({ video, onBack }) {
 
       <div className="video-results-list">
         <p className="video-results-header">
-          <strong>{video.match_count}</strong> match{video.match_count !== 1 ? 'es' : ''} — click any to seek
+          <strong>{video.match_count}</strong> match{video.match_count !== 1 ? 'es' : ''} - click any to seek
         </p>
         {video.results.map((r, i) => {
           const start = fmtTime(r.start_time);
@@ -47,7 +47,7 @@ export function VideoPlayer({ video, onBack }) {
               key={i}
               className="video-result-item"
               onClick={() => seekTo(r.frame_time || r.start_time)}
-              title={`Seek to ${r.frame_time  }`}
+              title={`Seek to ${r.frame_time || r.start_time  }`}
             >
               <span className={`type-badge type-${r.type}`}>{r.type}</span>
               <span className="video-result-text">{r.text}</span>

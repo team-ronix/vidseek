@@ -4,7 +4,7 @@ import torch.nn as nn
 
 
 class ScaleDotProductAttention(nn.Module):
-    """Scaled Dot-Product Attention — 'Attention Is All You Need', Section 3.2.1.
+    """Scaled Dot-Product Attention - 'Attention Is All You Need', Section 3.2.1.
 
     Attention(Q, K, V) = softmax(QK^T / sqrt(d_k)) · V
 

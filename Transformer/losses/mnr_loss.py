@@ -7,7 +7,7 @@ class MultipleNegativesRankingLoss(nn.Module):
 
     Given a batch of B (anchor, positive) pairs encoded as L2-normalized
     vectors, every other positive in the batch acts as a negative for each
-    anchor — for free, with no extra curation.
+    anchor - for free, with no extra curation.
 
     Mathematical formulation
     ────────────────────────
@@ -29,8 +29,8 @@ class MultipleNegativesRankingLoss(nn.Module):
           = CrossEntropy( S / τ,  [0, 1, 2, …, B-1] )
 
     Temperature τ controls sharpness:
-        · τ = 0.05  (default) — tight clusters, hard discrimination
-        · τ = 1.0             — softer, more lenient
+        · τ = 0.05  (default) - tight clusters, hard discrimination
+        · τ = 1.0             - softer, more lenient
         Lower τ is generally better for semantic search.
 
     In-batch negatives
@@ -54,10 +54,10 @@ class MultipleNegativesRankingLoss(nn.Module):
 
     def forward(
         self,
-        anchor_emb:   torch.Tensor,   # (B, d) — L2 normalized
-        positive_emb: torch.Tensor,   # (B, d) — L2 normalized
+        anchor_emb:   torch.Tensor,   # (B, d) - L2 normalized
+        positive_emb: torch.Tensor,   # (B, d) - L2 normalized
     ) -> torch.Tensor:
-        # (B, B) — since vectors are normalized, dot product = cosine similarity
+        # (B, B) - since vectors are normalized, dot product = cosine similarity
         sim = torch.matmul(anchor_emb, positive_emb.T) / self.temperature
 
         # Each row i should peak at column i
