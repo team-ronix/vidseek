@@ -9,7 +9,7 @@ from torch.nn.utils.rnn import pad_sequence
 import pandas as pd
 
 
-# ── Vocabulary ────────────────────────────────────────────────────────────────
+
 
 class Vocabulary:
     PAD_TOKEN = "<pad>"
@@ -108,7 +108,7 @@ class SentencePairDataset(Dataset):
     """Positive sentence pairs for MNR Loss training.
 
     Dataset format conversion
-    ─────────────────────────
+
     Input:  sentence1, sentence2, score   (score in [0,1] or [0,5])
     Output: (ids_a, ids_b) pairs where score >= pos_threshold
 
@@ -156,7 +156,7 @@ class TripletDataset(Dataset):
     """(anchor, positive, negative) triplets built from STS pair data.
 
     Dataset format conversion
-    ─────────────────────────
+
     Input:  sentence1, sentence2, score
     Output: (anchor, positive, negative) triplets where
             · positive = sentence paired with score >= pos_threshold
@@ -230,7 +230,7 @@ class TripletDataset(Dataset):
         )
 
 
-# ── collate functions ─────────────────────────────────────────────────────────
+
 
 def collate_fn(batch):
     """Collate for STSDataset - returns (ids_a, ids_b, mask_a, mask_b, scores)."""
@@ -267,7 +267,7 @@ def collate_triplet_fn(batch):
     )
 
 
-# ── DataLoader factories ──────────────────────────────────────────────────────
+
 
 def _build_vocab(train_df: pd.DataFrame, min_freq: int) -> Vocabulary:
     vocab = Vocabulary(min_freq=min_freq)

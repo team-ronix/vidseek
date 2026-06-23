@@ -37,7 +37,7 @@ def run(args):
         print(f"Error: Video file not found at {video_path}")
         sys.exit(1)
 
-    # ── 0. Register video in Postgres ────────────────────────────────────────────
+
     init_db()
     print("Registering video in database...")
     video_repo = VideoRepository()
@@ -51,7 +51,7 @@ def run(args):
     print(f"Video ID: {video_id}")
     video_repo.close()
 
-    # ── 1. Visual Processing ──────────────────────────────────────────────────────
+
     print("Video segmentation processing...")
     scene_segmenter = SceneSegmenter(video_path)
     scenes = scene_segmenter.segment_video()
@@ -112,7 +112,7 @@ def run(args):
         torch.cuda.empty_cache()
     gc.collect()
 
-    # ── 2. Audio Processing ───────────────────────────────────────────────────────
+
     print("\nAudio transcription processing...")
     asr_processor = ASR(video_path=video_path, model_name='openai/whisper-small')
     asr_processor.transcribe(task="translate")
@@ -123,7 +123,7 @@ def run(args):
         torch.cuda.empty_cache()
     gc.collect()
 
-    # ── 3. Sentence Segmentation ──────────────────────────────────────────────────
+
     print("\nSentence segmentation processing...")
     seg_processor = SentenceSegmentation(
         video_path=video_path,
@@ -139,7 +139,7 @@ def run(args):
         torch.cuda.empty_cache()
     gc.collect()
 
-    # ── 4. Embed OCR + Transcript → HNSW vector store ───────────────────────────
+
     print("\nEmbedding OCR and transcript results...")
     transformer = Transformer(ocr_inverted_index, transcript_segments)
     transformer.transform()

@@ -7,7 +7,7 @@ class TripletLoss(nn.Module):
     """Triplet Margin Loss for sentence embeddings.
 
     Mathematical formulation
-    ────────────────────────
+
     Given L2-normalized (anchor a, positive p, negative n):
 
     Cosine distance:  d(x, y) = 1 − cos_sim(x, y)
@@ -27,7 +27,7 @@ class TripletLoss(nn.Module):
     `margin` separates them on the sphere surface.
 
     Comparison with MNR Loss
-    ────────────────────────
+
     · Triplet uses 1 negative per anchor per step.
     · MNR uses (B−1) negatives per anchor per step - far more gradient signal.
     · Triplet suffers from "easy negative collapse": once simple triplets are
@@ -37,7 +37,7 @@ class TripletLoss(nn.Module):
       prefer MultipleNegativesRankingLoss.
 
     Hyperparameter guidance
-    ────────────────────────
+
     · margin = 0.3–0.5  - start here; increase if embeddings collapse
     · Cosine space: margins are in [-2, 2] (d = 1 − sim ∈ [0, 2])
     """

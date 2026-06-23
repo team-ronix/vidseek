@@ -10,7 +10,7 @@ class MultipleNegativesRankingLoss(nn.Module):
     anchor - for free, with no extra curation.
 
     Mathematical formulation
-    ────────────────────────
+
     Let A ∈ ℝ^{B×d} be the anchor embeddings and P ∈ ℝ^{B×d} the positive
     embeddings, both L2-normalized so cosine similarity = dot product.
 
@@ -40,7 +40,7 @@ class MultipleNegativesRankingLoss(nn.Module):
     Recommended batch size ≥ 32 (64–256 ideal).
 
     Relationship to other losses
-    ────────────────────────────
+
     · τ → ∞   : reduces toward MSE on similarity scores
     · τ → 0   : approaches hard max (winner-take-all)
     · Symmetric version (+ CrossEntropy on columns): SimCLR / NT-Xent

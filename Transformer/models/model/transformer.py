@@ -41,7 +41,7 @@ class Transformer(nn.Module):
         self.pooling = pooling
         self.encoder = Encoder(vocab_size, d_model, n_layers, n_heads, d_ff, max_len, dropout)
 
-    # ── pooling ───────────────────────────────────────────────────────────────
+
 
     def _pool(self, hidden: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         """hidden: (B, T, d)  mask: (B, T) - 1=real token, 0=padding"""
@@ -52,7 +52,7 @@ class Transformer(nn.Module):
         hidden = hidden * m + (1.0 - m) * (-1e9)
         return hidden.max(dim=1).values
 
-    # ── public API ────────────────────────────────────────────────────────────
+
 
     def encode(
         self,

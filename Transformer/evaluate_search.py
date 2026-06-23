@@ -28,7 +28,7 @@ from torch.nn.utils.rnn import pad_sequence
 from data import Vocabulary
 from models.model.transformer import Transformer
 
-# ── encoding helper ───────────────────────────────────────────────────────────
+
 
 def encode_sentences(
     model: Transformer,
@@ -63,7 +63,7 @@ def encode_sentences(
     return torch.cat(embeddings, dim=0)   # (N, d)
 
 
-# ── semantic search metrics ───────────────────────────────────────────────────
+
 
 def recall_at_k(
     query_embs:   torch.Tensor,   # (Q, d)
@@ -117,7 +117,7 @@ def mean_reciprocal_rank(
     return mrr / len(query_ids)
 
 
-# ── hard negative mining ──────────────────────────────────────────────────────
+
 
 def mine_hard_negatives(
     model: Transformer,
@@ -141,7 +141,7 @@ def mine_hard_negatives(
     3. Return a DataFrame with columns [anchor, positive, hard_negative].
 
     Why hard negatives improve training
-    ────────────────────────────────────
+
     Random negatives are easy - the model quickly separates them and gets no
     gradient. Hard negatives are sentences the model *currently* thinks are
     similar to the anchor but shouldn't be. Training on them forces the model
@@ -149,7 +149,7 @@ def mine_hard_negatives(
     precision at the top of the ranked list (Recall@1, MRR).
 
     Usage with TripletLoss
-    ───────────────────────
+
     hard_df = mine_hard_negatives(model, train_df, vocab, ...)
     # hard_df has columns: anchor, positive, hard_negative
     # Feed to TripletDataset or add to your SentencePairDataset as extra negatives.
@@ -203,7 +203,7 @@ def mine_hard_negatives(
     return result
 
 
-# ── full evaluation ───────────────────────────────────────────────────────────
+
 
 def evaluate(
     model_path: str,
@@ -277,7 +277,7 @@ def evaluate(
     return {"recall@1": r1, "recall@5": r5, "recall@10": r10, "mrr": mrr, "spearman": rho}
 
 
-# ── entry point ───────────────────────────────────────────────────────────────
+
 
 if __name__ == "__main__":
     import os
