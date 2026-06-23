@@ -21,7 +21,13 @@ from Storage.SQL.Repositories.VRDRepository import VRDRepository
 from Storage.SQL.Repositories.ObjectRepository import ObjectRepository
 from Storage.SQL.Repositories.OCRRepository import OCRRepository
 from Storage.SQL.DatabaseClient import SessionLocal
-
+from Storage.SQL.Models.Object import Object as ObjectModel
+from Storage.SQL.Models.ObjectVideo import ObjectVideo
+from Storage.SQL.Models.VRDSubject import VRDSubject
+from Storage.SQL.Models.VRDPredicate import VRDPredicate
+from Storage.SQL.Models.VRDObject import VRDObject
+from Storage.SQL.Models.VRDVideo import VRDVideo
+from Storage.SQL.Models.Video import Video as VideoModel
 import gc
 import torch
 from visual.SceneSegmenter import SceneSegmenter
@@ -225,7 +231,6 @@ def get_job_status(job_id: str):
 
 @app.get("/objects")
 def list_objects():
-    from Storage.SQL.Models.Object import Object as ObjectModel
     db = SessionLocal()
     try:
         rows = db.query(ObjectModel).order_by(ObjectModel.key).all()
@@ -236,15 +241,13 @@ def list_objects():
 
 @app.get("/vrd/options")
 def list_vrd_options():
-    from Storage.SQL.Models.VRDSubject   import VRDSubject
-    from Storage.SQL.Models.VRDPredicate import VRDPredicate
-    from Storage.SQL.Models.VRDObject    import VRDObject
+    
     db = SessionLocal()
     try:
         return {
-            "subjects":  [r.key for r in db.query(VRDSubject).order_by(VRDSubject.key).all()],
+            "subjects": [r.key for r in db.query(VRDSubject).order_by(VRDSubject.key).all()],
             "relations": [r.key for r in db.query(VRDPredicate).order_by(VRDPredicate.key).all()],
-            "objects":   [r.key for r in db.query(VRDObject).order_by(VRDObject.key).all()],
+            "objects": [r.key for r in db.query(VRDObject).order_by(VRDObject.key).all()],
         }
     finally:
         db.close()
@@ -273,15 +276,12 @@ def search_by_ocr(q: str, video_id: Optional[int] = None):
 
 @app.get("/search/object", response_model=GroupedResponse)
 def search_by_object(key: str):
-    from Storage.SQL.Models.Object      import Object as ObjectModel
-    from Storage.SQL.Models.ObjectVideo import ObjectVideo
-    from Storage.SQL.Models.Video       import Video as VideoModel
     db = SessionLocal()
     try:
         rows = (
             db.query(ObjectVideo, ObjectModel, VideoModel)
             .join(ObjectModel, ObjectVideo.object_id == ObjectModel.id)
-            .join(VideoModel,  ObjectVideo.video_id  == VideoModel.id)
+            .join(VideoModel, ObjectVideo.video_id == VideoModel.id)
             .filter(ObjectModel.key == key)
             .all()
         )
@@ -304,27 +304,22 @@ def search_by_object(key: str):
 
 @app.get("/search/vrd", response_model=GroupedResponse)
 def search_by_vrd(
-    subject:  Optional[str] = None,
-    object:   Optional[str] = None,
+    subject: Optional[str] = None,
+    object: Optional[str] = None,
     relation: Optional[str] = None,
 ):
-    from Storage.SQL.Models.VRDSubject   import VRDSubject
-    from Storage.SQL.Models.VRDPredicate import VRDPredicate
-    from Storage.SQL.Models.VRDObject    import VRDObject
-    from Storage.SQL.Models.VRDVideo     import VRDVideo
-    from Storage.SQL.Models.Video        import Video as VideoModel
     db = SessionLocal()
     try:
         q = (
             db.query(VRDVideo, VRDSubject, VRDPredicate, VRDObject, VideoModel)
-            .join(VRDSubject,   VRDVideo.subject_id   == VRDSubject.id)
+            .join(VRDSubject, VRDVideo.subject_id == VRDSubject.id)
             .join(VRDPredicate, VRDVideo.predicate_id == VRDPredicate.id)
-            .join(VRDObject,    VRDVideo.object_id    == VRDObject.id)
-            .join(VideoModel,   VRDVideo.video_id     == VideoModel.id)
+            .join(VRDObject, VRDVideo.object_id == VRDObject.id)
+            .join(VideoModel, VRDVideo.video_id == VideoModel.id)
         )
-        if subject:  q = q.filter(VRDSubject.key   == subject)
+        if subject: q = q.filter(VRDSubject.key == subject)
         if relation: q = q.filter(VRDPredicate.key == relation)
-        if object:   q = q.filter(VRDObject.key    == object)
+        if object: q = q.filter(VRDObject.key == object)
         results = [
             SearchResult(
                 type="vrd",

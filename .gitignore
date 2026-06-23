@@ -128,3 +128,5 @@ Transformer/**/*.pkl
 *.pth
 
 eval_data/
+visual/**/*.pkl
+visual/**/*.npy
