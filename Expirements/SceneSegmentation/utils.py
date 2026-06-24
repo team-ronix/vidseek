@@ -51,7 +51,7 @@ def recall_interval(gt, pred):
 def f1_interval(gt, pred):
     p = precision_interval(gt, pred)
     r = recall_interval(gt, pred)
-    return 2 * p * r / (p + r + 1e-32)
+    return 2 * p * r / (p + r)
 
 
 def calculate_interval_metric(gt_data, pred_data, metric_name):
