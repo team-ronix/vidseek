@@ -11,7 +11,7 @@ if str(_TRANSFORMER_DIR) not in sys.path:
 from models.model.transformer import Transformer
 from data import _make_ids
 
-_MODEL_DIR = _TRANSFORMER_DIR / "result_triplet"
+_MODEL_DIR = _TRANSFORMER_DIR / "reuslt_AllNLI+specter"
 _DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 _MAX_LEN = 128
 
@@ -29,15 +29,15 @@ class SentenceSegmentation:
 
         self._model = Transformer(
             vocab_size=len(self._vocab),
-            d_model=256,
-            n_layers=4,
-            n_heads=4,
-            d_ff=512,
+            d_model=384,
+            n_layers=6,
+            n_heads=6,
+            d_ff=1536,
             max_len=_MAX_LEN,
             pooling="mean",
         ).to(_DEVICE)
         self._model.load_state_dict(
-            torch.load(_MODEL_DIR / "final_hard_tuned_model.pt", map_location=_DEVICE)
+            torch.load(_MODEL_DIR / "best_model.pt", map_location=_DEVICE)
         )
         self._model.eval()
 
