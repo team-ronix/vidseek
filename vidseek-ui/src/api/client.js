@@ -70,3 +70,4 @@ export function uploadVideo(file, onProgress, options = {}) {
 export async function getChapters(videoPath) {
   return request(`/videos/chapters?path=${encodeURIComponent(videoPath)}`);
 }
+

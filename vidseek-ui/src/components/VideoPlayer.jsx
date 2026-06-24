@@ -78,6 +78,7 @@ export function VideoPlayer({ video, onBack }) {
                 onClick={() => seekTo(r.frame_time || r.start_time)}
               >
                 <span className={`type-badge type-${r.type}`}>{r.type}</span>
+                <span className={`model-badge model-${r.source_model || "transformer"}`}>{r.source_model || "tf"}</span>
                 <span className="video-result-text">{r.text}</span>
                 {start && (
                   <span className="video-result-time">
@@ -121,3 +122,4 @@ export function VideoPlayer({ video, onBack }) {
     </div>
   );
 }
+

@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 from collections import Counter
 from tokenizer import tokenize
 
@@ -63,3 +63,26 @@ class BM25Encoder:
     def encode_as_dict(self, sentence: str) -> dict:
         vec = self.encode(sentence)
         return {int(i): float(v) for i, v in enumerate(vec) if v > 0.0}
+    def save(self, path: str) -> None:
+        np.savez(
+            path,
+            vocab_terms=np.array(list(self.vocabulary.keys())),
+            vocab_indices=np.array(list(self.vocabulary.values())),
+            idf=self._idf,
+            avg_dl=np.array([self._avg_dl]),
+            k1=np.array([self.k1]),
+            b=np.array([self.b]),
+        )
+
+    @classmethod
+    def load(cls, path: str) -> "BM25Encoder":
+        data = np.load(path if path.endswith(".npz") else path + ".npz", allow_pickle=True)
+        enc = cls(
+            k1=float(data["k1"][0]),
+            b=float(data["b"][0]),
+        )
+        terms = [k.decode() if isinstance(k, bytes) else str(k) for k in data["vocab_terms"].tolist()]
+        enc.vocabulary = dict(zip(terms, [int(v) for v in data["vocab_indices"].tolist()]))
+        enc._idf = data["idf"]
+        enc._avg_dl = float(data["avg_dl"][0])
+        return enc

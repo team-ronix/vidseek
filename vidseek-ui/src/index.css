@@ -755,3 +755,46 @@ select { font-family: inherit; }
 .chapter-title {
   font-weight: 600;
 }
+
+/* -- Model selector pills -------------------------------- */
+.search-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.search-panel-inline { display: flex; flex-direction: column; gap: 8px; }
+
+.pill-hybrid.active  { border-color: var(--amber, #d97706); color: var(--amber, #d97706); background: rgba(217,119,6,.08); }
+.pill-both.active    { border-color: var(--purple, #7c3aed); color: var(--purple, #7c3aed); background: rgba(124,58,237,.08); }
+
+/* -- Model badge on result items ------------------------- */
+.model-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  letter-spacing: .3px;
+  text-transform: uppercase;
+}
+.model-badge.model-transformer { background: var(--accent-light); color: var(--accent); border: 1px solid var(--accent-mid); }
+.model-badge.model-hybrid       { background: rgba(217,119,6,.1); color: #d97706; border: 1px solid rgba(217,119,6,.3); }
+
+/* -- Latency bar ----------------------------------------- */
+.latency-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.latency-chip {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  color: var(--text-3);
+}
+.latency-chip strong { font-weight: 700; color: var(--text-2); }
+.latency-chip.latency-transformer { border-color: var(--accent-mid); }
+.latency-chip.latency-hybrid       { border-color: rgba(217,119,6,.35); }
