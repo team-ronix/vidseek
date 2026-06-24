@@ -16,13 +16,13 @@ export function useUpload() {
     setMessage('');
   };
 
-  const startUpload = useCallback(async (file) => {
+  const startUpload = useCallback(async (file, options = {}) => {
     setPhase('uploading');
     setUploadPct(0);
     setMessage(`Uploading ${file.name}…`);
 
     try {
-      const { job_id } = await uploadVideo(file, (pct) => setUploadPct(pct));
+      const { job_id } = await uploadVideo(file, (pct) => setUploadPct(pct), options);
 
       setPhase('processing');
       setMessage('Pipeline starting…');

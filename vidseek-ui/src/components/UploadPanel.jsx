@@ -1,16 +1,21 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { UploadCloud, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { useUpload } from '../hooks/useUpload';
 
 const ACCEPT = '.mp4,.avi,.mov,.mkv,.webm';
 
+const DETECTOR_OPTS   = [{ value: 'craft', label: 'CRAFT' }, { value: 'east', label: 'EAST' }];
+const RECOGNIZER_OPTS = [{ value: 'easyocr', label: 'EasyOCR' }, { value: 'mser', label: 'MSER' }];
+
 export function UploadPanel() {
   const fileRef = useRef(null);
   const { phase, uploadPct, message, startUpload, reset } = useUpload();
+  const [detector,   setDetector]   = useState('craft');
+  const [recognizer, setRecognizer] = useState('easyocr');
 
   const handleFiles = files => {
     const file = files[0];
-    if (file) startUpload(file);
+    if (file) startUpload(file, { detector, recognizer });
   };
 
   const onDrop = e => {
@@ -29,26 +34,55 @@ export function UploadPanel() {
     <div className="upload-panel">
 
       {(isIdle || isDone || isError) && (
-        <div
-          className="upload-drop"
-          onDragOver={e => e.preventDefault()}
-          onDrop={onDrop}
-          onClick={() => fileRef.current?.click()}
-          role="button"
-          tabIndex={0}
-          onKeyDown={e => e.key === 'Enter' && fileRef.current?.click()}
-        >
-          <input
-            ref={fileRef}
-            type="file"
-            accept={ACCEPT}
-            className="sr-only"
-            onChange={e => handleFiles(e.target.files)}
-          />
-          <UploadCloud size={24} className="upload-icon" />
-          <p className="upload-cta"><strong>Drop a video</strong> or click to browse</p>
-          <p className="upload-hint">mp4 · avi · mov · mkv · webm</p>
-        </div>
+        <>
+          <div
+            className="upload-drop"
+            onDragOver={e => e.preventDefault()}
+            onDrop={onDrop}
+            onClick={() => fileRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            onKeyDown={e => e.key === 'Enter' && fileRef.current?.click()}
+          >
+            <input
+              ref={fileRef}
+              type="file"
+              accept={ACCEPT}
+              className="sr-only"
+              onChange={e => handleFiles(e.target.files)}
+            />
+            <UploadCloud size={24} className="upload-icon" />
+            <p className="upload-cta"><strong>Drop a video</strong> or click to browse</p>
+            <p className="upload-hint">mp4 · avi · mov · mkv · webm</p>
+          </div>
+
+          <div className="ocr-options">
+            <div className="ocr-option-row">
+              <span className="ocr-option-label">Detector</span>
+              <div className="ocr-pills">
+                {DETECTOR_OPTS.map(o => (
+                  <button
+                    key={o.value}
+                    className={`ocr-pill${detector === o.value ? ' active' : ''}`}
+                    onClick={() => setDetector(o.value)}
+                  >{o.label}</button>
+                ))}
+              </div>
+            </div>
+            <div className="ocr-option-row">
+              <span className="ocr-option-label">Recognizer</span>
+              <div className="ocr-pills">
+                {RECOGNIZER_OPTS.map(o => (
+                  <button
+                    key={o.value}
+                    className={`ocr-pill${recognizer === o.value ? ' active' : ''}`}
+                    onClick={() => setRecognizer(o.value)}
+                  >{o.label}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       {isActive && (

@@ -42,11 +42,13 @@ export async function getJobStatus(jobId) {
   return request(`/jobs/${jobId}`);
 }
 
-export function uploadVideo(file, onProgress) {
+export function uploadVideo(file, onProgress, options = {}) {
   return new Promise((resolve, reject) => {
     const xhr  = new XMLHttpRequest();
     const form = new FormData();
     form.append('file', file);
+    if (options.detector)   form.append('detector',   options.detector);
+    if (options.recognizer) form.append('recognizer', options.recognizer);
     xhr.upload.addEventListener('progress', e => {
       if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
     });

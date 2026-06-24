@@ -5,7 +5,7 @@ import threading
 from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
@@ -90,7 +90,8 @@ def _group_by_video(results: list[SearchResult]) -> list[VideoGroup]:
         for g in sorted(groups.values(), key=lambda g: g["match_count"], reverse=True)
     ]
 
-def _run_pipeline(job_id: str, video_path: str, video_id: int):
+def _run_pipeline(job_id: str, video_path: str, video_id: int,
+                   detector: str = 'craft', recognizer: str = 'easyocr'):
     def update(msg: str, status: str = "running"):
         _jobs[job_id] = {"status": status, "message": msg}
 
@@ -105,7 +106,7 @@ def _run_pipeline(job_id: str, video_path: str, video_id: int):
         del segmenter; gc.collect()
 
         update("OCR processing...")
-        ocr = OCR(frames, video_path, video_id)
+        ocr = OCR(frames, video_path, video_id, detector=detector, recognizer=recognizer)
         ocr.process_frames()
         ocr_index = ocr.get_inverted_index()
         del ocr; gc.collect()
@@ -185,9 +186,17 @@ def search(q: str, top_k: int = 10):
     return SearchResponse(query=q, results=vector_results, videos=_group_by_video(vector_results))
 
 @app.post("/videos/upload")
-async def upload_video(file: UploadFile = File(...)):
+async def upload_video(
+    file: UploadFile = File(...),
+    detector: str = Form('craft'),
+    recognizer: str = Form('easyocr'),
+):
     if not file.filename.endswith((".mp4", ".avi", ".mov", ".mkv", ".webm")):
         raise HTTPException(status_code=400, detail="Unsupported video format")
+    if detector not in ('east', 'craft'):
+        raise HTTPException(status_code=400, detail="detector must be 'east' or 'craft'")
+    if recognizer not in ('mser', 'easyocr'):
+        raise HTTPException(status_code=400, detail="recognizer must be 'mser' or 'easyocr'")
 
     dest = UPLOAD_DIR / file.filename
     with open(dest, "wb") as f:
@@ -203,7 +212,9 @@ async def upload_video(file: UploadFile = File(...)):
     job_id = str(uuid.uuid4())
     _jobs[job_id] = {"status": "pending", "message": "Queued"}
     threading.Thread(
-        target=_run_pipeline, args=(job_id, str(dest), video_id), daemon=True
+        target=_run_pipeline,
+        args=(job_id, str(dest), video_id, detector, recognizer),
+        daemon=True,
     ).start()
 
     return JSONResponse({"job_id": job_id, "video_id": video_id})
