@@ -1,8 +1,5 @@
 import os
 import json
-import time
-from PIL import Image
-import cv2
 from visual.vrd_ml.models.vrd_model import VRDModel
 
 _VRD_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -10,11 +7,12 @@ _MODEL_PATH = os.path.join(_VRD_DIR, 'checkpoints', 'vrd_rf_real.pkl')
 
 
 class VRD:
-    def __init__(self, video_path, frames, objects, top_k=5):
+    def __init__(self, video_path, frames, objects, top_k=1, min_prob=0.025):
         self.video_path = video_path
         self.frames = frames
         self.objects = objects
         self.top_k = top_k
+        self.min_prob = min_prob
         if not os.path.exists(_MODEL_PATH):
             raise ValueError("Model file does not exist")
         self.model = VRDModel.load(_MODEL_PATH)
@@ -30,7 +28,7 @@ class VRD:
             boxes.append([x1, y1, x2, y2])
             labels.append(label)
             scores.append(score)
-        return self.model.predict(frame_data, boxes, labels, scores, top_k=1)
+        return self.model.predict(frame_data, boxes, labels, scores, top_k=self.top_k, min_prob=self.min_prob)
 
     def detect_relationships(self):
         for i, (frame_data, obj_data) in enumerate(zip(self.frames, self.objects), 1):
@@ -43,7 +41,7 @@ class VRD:
             print(f"[{i}/{len(self.frames)}] Scene {scene.index}: Start at {scene.start_time:.2f}s, End at {scene.end_time:.2f}s, Duration {scene.duration:.2f}s ({frame_count} frames)")
             print(f"       Processing frame {frame_number}")
 
-            if frame_number is None:
+            if frame_number is None or frame is None:
                 continue
 
             triples = self._build_pred_data(frame, obj_data)

@@ -6,16 +6,18 @@ const ACCEPT = '.mp4,.avi,.mov,.mkv,.webm';
 
 const DETECTOR_OPTS   = [{ value: 'craft', label: 'CRAFT' }, { value: 'east', label: 'EAST' }];
 const RECOGNIZER_OPTS = [{ value: 'easyocr', label: 'EasyOCR' }, { value: 'mser', label: 'MSER' }];
+const OBJECT_DETECTOR_OPTS = [{ value: 'faster_rcnn', label: 'Faster R-CNN' }, { value: 'hog', label: 'HOG' }];
 
 export function UploadPanel() {
   const fileRef = useRef(null);
   const { phase, uploadPct, message, startUpload, reset } = useUpload();
   const [detector,   setDetector]   = useState('craft');
   const [recognizer, setRecognizer] = useState('easyocr');
+  const [object_detector, setObjectDetector] = useState('faster_rcnn');
 
   const handleFiles = files => {
     const file = files[0];
-    if (file) startUpload(file, { detector, recognizer });
+    if (file) startUpload(file, { detector, recognizer, object_detector });
   };
 
   const onDrop = e => {
@@ -77,6 +79,18 @@ export function UploadPanel() {
                     key={o.value}
                     className={`ocr-pill${recognizer === o.value ? ' active' : ''}`}
                     onClick={() => setRecognizer(o.value)}
+                  >{o.label}</button>
+                ))}
+              </div>
+            </div>
+            <div className="ocr-option-row">
+              <span className="ocr-option-label">Object Detector</span>
+              <div className="ocr-pills">
+                {OBJECT_DETECTOR_OPTS.map(o => (
+                  <button
+                    key={o.value}
+                    className={`ocr-pill${object_detector === o.value ? ' active' : ''}`}
+                    onClick={() => setObjectDetector(o.value)}
                   >{o.label}</button>
                 ))}
               </div>

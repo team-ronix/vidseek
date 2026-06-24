@@ -1,4 +1,4 @@
-import gc
+﻿import gc
 import os
 import sys
 import time
@@ -37,8 +37,9 @@ from Storage.SQL.Models.VRDVideo import VRDVideo
 from Storage.SQL.Models.Video import Video as VideoModel
 from visual.SceneSegmenter import SceneSegmenter
 from OCR.src.OCR import OCR
-from visual.faster_rcnn.ObjectDetector import ObjectDetector
-from visual.VRD import VRD
+from visual.hog.ObjectDetector import ObjectDetector as HOGObjectDetector
+from visual.faster_rcnn.ObjectDetector import ObjectDetector as DLObjectDetector
+from visual.vrd_ml.VRD import VRD
 from audio.ASR import ASR
 from audio.SentenceSegmenter import SentenceSegmentation
 
@@ -68,6 +69,7 @@ class SearchResult(BaseModel):
     end_time: float
     sim: float
     source_model: str = "transformer"
+    model_name: Optional[str] = None
 
 class VideoGroup(BaseModel):
     video_path: str
@@ -102,7 +104,7 @@ def _group_by_video(results: list[SearchResult]) -> list[VideoGroup]:
 # -- Processing pipeline -----------------------------------------------------
 
 def _run_pipeline(job_id: str, video_path: str, video_id: int,
-                  detector: str = "craft", recognizer: str = "easyocr"):
+                   detector: str = 'craft', recognizer: str = 'easyocr', object_detector: str = 'faster_rcnn'):
     def update(msg: str, status: str = "running"):
         _jobs[job_id] = {"status": status, "message": msg}
 
@@ -121,16 +123,21 @@ def _run_pipeline(job_id: str, video_path: str, video_id: int,
         ocr = OCR(frames, video_path, video_id, detector=detector, recognizer=recognizer)
         ocr.process_frames()
         ocr_index = ocr.get_inverted_index()
-        del ocr; gc.collect()
+        del ocr
+        gc.collect()
 
         update("Object detection...")
-        obj_det = ObjectDetector(video_path, frames)
-        obj_det.detect_objects()
+        obj_det = None
+        if object_detector == "faster_rcnn":
+            obj_det = DLObjectDetector(video_path, frames)
+        else:
+            obj_det = HOGObjectDetector(video_path, frames)
+        objects = obj_det.detect_objects()
         ObjectRepository().save_from_inverted_index(obj_det.get_inverted_index(), video_id)
         del obj_det; gc.collect()
 
         update("Visual relationship detection...")
-        vrd = VRD(frames=frames, video_path=video_path, api_key=os.getenv("GEMINI_TOKEN") or "")
+        vrd = VRD(frames=frames, video_path=video_path, objects=objects)
         vrd.detect_relationships()
         VRDRepository().save_from_inverted_index(vrd.get_inverted_index(), video_id)
         del vrd
@@ -244,8 +251,9 @@ def search(q: str, top_k: int = 10, model: str = "transformer"):
 @app.post("/videos/upload")
 async def upload_video(
     file: UploadFile = File(...),
-    detector: str = Form("craft"),
-    recognizer: str = Form("easyocr"),
+    detector: str = Form('craft'),
+    recognizer: str = Form('easyocr'),
+    object_detector: str = Form('faster_rcnn')
 ):
     if not file.filename.endswith((".mp4", ".avi", ".mov", ".mkv", ".webm")):
         raise HTTPException(status_code=400, detail="Unsupported video format")
@@ -253,6 +261,8 @@ async def upload_video(
         raise HTTPException(status_code=400, detail="detector must be 'east' or 'craft'")
     if recognizer not in ("mser", "easyocr"):
         raise HTTPException(status_code=400, detail="recognizer must be 'mser' or 'easyocr'")
+    if object_detector not in ('hog', 'faster_rcnn'):
+        raise HTTPException(status_code=400, detail="object_detector must be 'hog' or 'faster_rcnn'")
 
     dest = UPLOAD_DIR / file.filename
     with open(dest, "wb") as f:
@@ -269,7 +279,7 @@ async def upload_video(
     _jobs[job_id] = {"status": "pending", "message": "Queued"}
     threading.Thread(
         target=_run_pipeline,
-        args=(job_id, str(dest), video_id, detector, recognizer),
+        args=(job_id, str(dest), video_id, detector, recognizer, object_detector),
         daemon=True,
     ).start()
     return JSONResponse({"job_id": job_id, "video_id": video_id})
@@ -333,10 +343,16 @@ def search_by_object(key: str):
             .filter(ObjectModel.key == key).all()
         )
         results = [
-            SearchResult(type="object", text=obj.key, video_path=video.file_path,
-                         frame_time=float(ov.frame_time or 0),
-                         start_time=float(ov.start_time or 0),
-                         end_time=float(ov.end_time or 0), sim=0.0)
+            SearchResult(
+                type="object",
+                text=obj.key,
+                video_path=video.file_path,
+                frame_time=float(ov.frame_time or 0),
+                start_time=float(ov.start_time or 0),
+                end_time=float(ov.end_time or 0),
+                sim=0.0,
+                model_name=ov.model_name
+            )
             for ov, obj, video in rows
         ]
         return GroupedResponse(videos=_group_by_video(results), total_results=len(results))

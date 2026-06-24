@@ -53,6 +53,7 @@ export function uploadVideo(file, onProgress, options = {}) {
     form.append('file', file);
     if (options.detector)   form.append('detector',   options.detector);
     if (options.recognizer) form.append('recognizer', options.recognizer);
+    if (options.object_detector) form.append('object_detector', options.object_detector);
     xhr.upload.addEventListener('progress', e => {
       if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
     });

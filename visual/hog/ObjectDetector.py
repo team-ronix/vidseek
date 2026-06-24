@@ -54,32 +54,32 @@ class ObjectDetector:
             print(f"[{i}/{len(self.frames)}] Scene {scene.index}: Start at {scene.start_time:.2f}s, End at {scene.end_time:.2f}s, Duration {scene.duration:.2f}s ({frame_count} frames)")
             print(f"\tProcessing frame {frame_number}")
             
-            if frame_number is None:
+            if frame_number is None or frame is None:
+                objects.append([])
                 continue
-            
-            if frame is not None:
-                results = self._build_results(frame)
-                results.sort(key=lambda x: x[1], reverse=True)  # Sort results by score
-                results = results[:self.top_k]  # Keep only top_k results
-                objects.append(results)
-                for name, conf, box in results:
-                        print(f"       - Detected '{name}' with confidence {conf:.2f}")
-                        if name not in self.inverted_index:
-                            self.inverted_index[name] = []
-                        
-                        # Skip if already exists in this scene
-                        if any(occ['scene'] == scene.index for occ in self.inverted_index[name]):
-                            continue
 
-                        self.inverted_index[name].append({
-                            'scene': scene.index,
-                            'frame': frame_number,
-                            'video_path': self.video_path,
-                            "frame_time": frame_time,
-                            'start_time': scene.start_time,
-                            'end_time': scene.end_time,
-                            'confidence': float(conf)
-                        })
+            results = self._build_results(frame)
+            results.sort(key=lambda x: x[1], reverse=True)  # Sort results by score
+            objects.append(results)
+            for name, conf, box in results:    
+                print(f"       - Detected '{name}' with confidence {conf:.2f}")
+                if name not in self.inverted_index:
+                    self.inverted_index[name] = []
+                
+                # Skip if already exists in this scene
+                if any(occ['scene'] == scene.index for occ in self.inverted_index[name]):
+                    continue
+
+                self.inverted_index[name].append({
+                    'scene': scene.index,
+                    'frame': frame_number,
+                    'video_path': self.video_path,
+                    "frame_time": frame_time,
+                    'start_time': scene.start_time,
+                    'end_time': scene.end_time,
+                    'confidence': float(conf),
+                    'model_name': 'HOG'
+                })
         return objects
 
     def save_inverted_index(self, output_path='object_inverted_index.json'):
