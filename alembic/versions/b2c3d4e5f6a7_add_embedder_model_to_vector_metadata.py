@@ -23,7 +23,7 @@ def upgrade() -> None:
     op.create_index("ix_vector_metadata_embedder_model", "vector_metadata", ["embedder_model"])
 
     # 2. Drop the old single-column unique constraint on vector_id
-    op.drop_constraint("vector_metadata_vector_id_key", "vector_metadata", type_="unique")
+    op.drop_constraint("vector_metadata_pkey", "vector_metadata", type_="unique")
 
     # 3. Add composite unique constraint
     op.create_unique_constraint(
@@ -33,6 +33,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_constraint("uq_vector_model", "vector_metadata", type_="unique")
-    op.create_unique_constraint("vector_metadata_vector_id_key", "vector_metadata", ["vector_id"])
+    op.create_unique_constraint("vector_metadata_pkey", "vector_metadata", ["vector_id"])
     op.drop_index("ix_vector_metadata_embedder_model", table_name="vector_metadata")
     op.drop_column("vector_metadata", "embedder_model")
