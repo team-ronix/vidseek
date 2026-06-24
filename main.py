@@ -78,7 +78,7 @@ def run(args):
         torch.cuda.empty_cache()
     gc.collect()
 
-    # Object detection → Postgres
+    # Object detection -> Postgres
     print("\nObject detection processing...")
     object_detector = ObjectDetector(video_path, frames)
     object_detector.detect_objects()
@@ -95,7 +95,7 @@ def run(args):
         torch.cuda.empty_cache()
     gc.collect()
 
-    # VRD → Postgres
+    # VRD -> Postgres
     print("\nVisual relationship detection processing...")
     vrd_processor = VRD(frames=frames, video_path=video_path, api_key=os.getenv("GEMINI_TOKEN"))
     vrd_processor.detect_relationships()

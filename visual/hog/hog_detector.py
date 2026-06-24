@@ -5,11 +5,9 @@ import time
 import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.svm import LinearSVC
-
 from visual.hog.features.hog_descriptor import HOGDescriptor
 from visual.hog.datastructures.voc_dataset import VOCDataset
 from visual.hog.datastructures.component import Component
-
 from visual.hog.utils import calculate_iou
 from visual.hog.persistence import save, load
 from visual.hog.checkpoint import save_checkpoint, load_checkpoint
@@ -20,18 +18,6 @@ from visual.hog.training.hard_negative_mining import mine_hard_negatives_pyramid
 from visual.hog.inference.detection import detect
 from visual.hog.inference.contextual_rescoring import ContextualRescorer
 
-
-# bg_multiplier: number of background patches to use per positive patch in the class component. 
-# for example, if bg_multiplier=2.0, then for every positive patch in the component, we will use 2 background patches in the negative set of that component.
-
-# other_classes_total_ratio: total number of positive patches from other classes to use in the negative set of the component, 
-# as a ratio of the number of positive patches in that class component. for example, if other_classes_total_ratio=1.0, 
-# then the total number of positive patches from all other classes in the negative set of the component will be equal to the number of positive patches in that component.
-
-# Research paper defined hard negative example as one is either on the "wrong side" of the decision boundary 
-# or too close to it (within the margin) -> its score by svm > -1 (y * f(x) < 1) according to equation 18 in the paper
-
-# No need for standard scaling as hog features are normalized by its implemented normalize funciton in hog_descriptor
 class HOGDetector:
     def __init__(
         self,
@@ -42,8 +28,8 @@ class HOGDetector:
         max_itr_svm: int = 30_000,
         training_epochs: int = 2,
         area_percentile: float = 80,
-        hard_neg_threshold: float = -1,   # According to the paper: -1
-        pyramid_step: int = 2,          # Used to fasten searching only in inference stage
+        hard_neg_threshold: float = -1,   # according to the paper: -1
+        pyramid_step: int = 2,          # used to fasten searching only in inference stage
         max_hard_per_image: int = 20,
         bg_multiplier: float = 2.0,
         other_classes_total_ratio: float = 1.0,

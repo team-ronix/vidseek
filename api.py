@@ -134,7 +134,7 @@ def _run_pipeline(job_id: str, video_path: str, video_id: int):
         gc.collect()
 
         update("Audio transcription...")
-        asr = ASR(video_path=video_path, model_name="openai/whisper-large-v3")
+        asr = ASR(video_path=video_path, model_name="openai/whisper-small")
         asr.transcribe(task="translate")
         transcription_path = os.path.join(json_folder, f"{video_id}_transcription.json")
         asr.save_transcription(transcription_path)

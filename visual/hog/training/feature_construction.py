@@ -1,7 +1,7 @@
 import gc
 import numpy as np
 import cv2
-from utils import load_image
+from visual.hog.utils import load_image
 
 
 def construct_Xpos_Xneg(

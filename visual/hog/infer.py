@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 from visual.hog.hog_detector import HOGDetector
 
-_PALETTE = [
+colors = [
     (214, 39, 40), (255, 127, 14), ( 44, 160, 44), ( 31, 119, 180),
     (148, 103, 189), (140, 86, 75), (227, 119, 194), (127, 127, 127),
     ( 23, 190, 207), (188, 189, 34), (174, 199, 232), (255, 187, 120),
@@ -16,7 +16,7 @@ _PALETTE = [
 
 def _color(cls: str, class_list: list) -> tuple:
     idx = class_list.index(cls) if cls in class_list else 0
-    return _PALETTE[idx % len(_PALETTE)]
+    return colors[idx % len(colors)]
 
 
 def draw_detections(image: np.ndarray, boxes, scores, labels, class_list: list) -> np.ndarray:
@@ -143,7 +143,7 @@ def main():
     if args.output:
         annotated = draw_detections(image, boxes, scores, labels, detector.classes)
         cv2.imwrite(args.output, annotated)
-        print(f"\nAnnotated image saved → {args.output}")
+        print(f"\nAnnotated image saved -> {args.output}")
 
     return boxes, scores, labels
 

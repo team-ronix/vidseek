@@ -1,53 +1,44 @@
 import os
 import json
-import torch
-from visual.faster_rcnn.model.faster_rcnn import FasterRCNN
-from visual.faster_rcnn.voc_dataset import VOC_CLASSES
+from visual.hog.hog_detector import HOGDetector
 from PIL import Image
 import numpy as np
 
 _ObjDetector_DIR = os.path.dirname(os.path.abspath(__file__))
-_FASTER_RCNN_MODEL_PATH = os.path.join(_ObjDetector_DIR, 'faster_rcnn_final.pth')
+_HOG_MODEL_PATH = os.path.join(_ObjDetector_DIR, 'model')
 
 class ObjectDetector:
-    def __init__(self, video_path, frames, score_thresh=0.6):
+    def __init__(self, video_path, frames, score_thresh=0.8, top_k=5, use_context=False):
         self.video_path = video_path
         self.frames = frames
         self.inverted_index = {}
-        NUM_CLASSES = len(VOC_CLASSES)
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model = FasterRCNN(num_classes=NUM_CLASSES, score_thresh=score_thresh, pretrained=False).to(self.device)
-        if not os.path.exists(_FASTER_RCNN_MODEL_PATH):
+        self.score_thresh = score_thresh
+        self.top_k = top_k
+        self.use_context = use_context
+        self.detector = HOGDetector(
+            classes=[],
+            hog_descriptor_params=dict(
+                cell_size=8, n_orient_cs=18, n_orient_ci=9,
+                alpha=0.2, n_energy=4, n_octaves=4, llambda=4, min_size=48,
+            ),
+        )
+        if not os.path.exists(_HOG_MODEL_PATH):
             raise ValueError("Model file does not exist")
-        self.model.load_state_dict(torch.load(_FASTER_RCNN_MODEL_PATH, map_location=self.device))
-        self.model.eval()
+        self.detector.load(_HOG_MODEL_PATH)
         
-    def _process_img(self, img, target_size=600, max_size=1000):
-        pixel_mean = np.array([0.485, 0.456, 0.406], np.float32)
-        pixel_std = np.array([0.229, 0.224, 0.225], np.float32)
-        w, h = img.size
-        scale = target_size / min(h, w)
-        if scale * max(h, w) > max_size:
-            scale = max_size / max(h, w)
-        img = img.resize((int(round(w * scale)), int(round(h * scale))), Image.BILINEAR)
-        arr = (np.array(img, np.float32) / 255.0 - pixel_mean) / pixel_std
-        return torch.from_numpy(arr.copy()).permute(2, 0, 1), scale
     
     def _build_results(self, frame):
-        if isinstance(frame, np.ndarray):
-            frame = Image.fromarray(frame)
-        processed_frame, scale = self._process_img(frame)
-        scaled_H, scaled_W = processed_frame.shape[1], processed_frame.shape[2]
-        with torch.no_grad():
-            res = self.model(processed_frame.unsqueeze(0).to(self.device), [(scaled_H, scaled_W)])[0]
-        pred_boxes  = res['boxes'].cpu()
-        pred_scores = res['scores'].cpu()
-        pred_labels = res['labels'].cpu()
+        pred_boxes, pred_scores, pred_labels = self.detector.detect(
+            frame,
+            threshold = self.score_thresh,
+            overlap_threshold = 0.5,
+            use_context = self.use_context,
+        )
         print(f'\nDetections ({len(pred_scores)} found):')
         results = []
         for box, score, label in zip(pred_boxes, pred_scores, pred_labels):
-            cls_name = VOC_CLASSES[label.item() - 1]
-            x1, y1, x2, y2 = (v / scale for v in box.tolist())
+            cls_name = label
+            x1, y1, x2, y2 = box
             results.append((cls_name, score, (x1, y1, x2, y2)))
         return results
 
@@ -68,6 +59,7 @@ class ObjectDetector:
             if frame is not None:
                 results = self._build_results(frame)
                 results.sort(key=lambda x: x[1], reverse=True)  # Sort results by score
+                results = results[:self.top_k]  # Keep only top_k results
                 for name, conf, box in results:
                         print(f"       - Detected '{name}' with confidence {conf:.2f}")
                         if name not in self.inverted_index:

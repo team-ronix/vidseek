@@ -1,5 +1,4 @@
 import argparse
-import gc
 import json
 import os
 import pickle
@@ -8,7 +7,6 @@ import time
 import warnings
 from collections import defaultdict
 from pathlib import Path
-import cv2
 import numpy as np
 from tqdm import tqdm
 from visual.hog.datastructures.voc_dataset import VOCDataset
@@ -219,47 +217,44 @@ def parse_args():
     p.add_argument("--max-itr-svm", type=int, default=_config_value(config, "max_itr_svm", 50_000))
     p.add_argument("--epochs", type=int, default=_config_value(config, "training_epochs", 10), dest="training_epochs")
     p.add_argument("--hard-neg-threshold", type=float, default=_config_value(config, "hard_neg_threshold", -1.0))
-    p.add_argument("--pyramid-step",       type=int,   default=_config_value(config, "pyramid_step", 2))
-    p.add_argument("--max-hard-per-image", type=int,   default=_config_value(config, "max_hard_per_image", 20))
-    p.add_argument("--bg-multiplier",      type=float, default=_config_value(config, "bg_multiplier", 3.0))
-    p.add_argument("--other-cls-ratio",    type=float, default=_config_value(config, "other_classes_total_ratio", 1.0),
+    p.add_argument("--pyramid-step", type=int, default=_config_value(config, "pyramid_step", 2))
+    p.add_argument("--max-hard-per-image", type=int, default=_config_value(config, "max_hard_per_image", 20))
+    p.add_argument("--bg-multiplier", type=float, default=_config_value(config, "bg_multiplier", 3.0))
+    p.add_argument("--other-cls-ratio", type=float, default=_config_value(config, "other_classes_total_ratio", 1.0),
                    dest="other_classes_total_ratio")
-    p.add_argument("--bbr-alpha",          type=float, default=_config_value(config, "bbr_alpha", 100.0))
-    p.add_argument("--min-iou-latent",     type=float, default=_config_value(config, "min_iou_between_gt_and_latent", 0.5),
+    p.add_argument("--bbr-alpha", type=float, default=_config_value(config, "bbr_alpha", 100.0))
+    p.add_argument("--min-iou-latent", type=float, default=_config_value(config, "min_iou_between_gt_and_latent", 0.5),
                    dest="min_iou_between_gt_and_latent")
 
     # Contextual rescorer
-    p.add_argument("--rescorer-iou-thresh",        type=float, default=_config_value(config, "rescorer_iou_thresh", 0.5))
-    p.add_argument("--rescorer-c",                 type=float, default=_config_value(config, "rescorer_c", 0.1))
-    p.add_argument("--rescorer-det-threshold",     type=float, default=_config_value(config, "rescorer_det_threshold", 0.05))
-    p.add_argument("--rescorer-neg-size",          type=int,   default=_config_value(config, "rescorer_neg_size", 30_000))
-    p.add_argument("--rescorer-checkpoint-every",  type=int,   default=_config_value(config, "rescorer_checkpoint_every", 50))
+    p.add_argument("--rescorer-iou-thresh", type=float, default=_config_value(config, "rescorer_iou_thresh", 0.5))
+    p.add_argument("--rescorer-c", type=float, default=_config_value(config, "rescorer_c", 0.1))
+    p.add_argument("--rescorer-det-threshold", type=float, default=_config_value(config, "rescorer_det_threshold", 0.05))
+    p.add_argument("--rescorer-neg-size", type=int, default=_config_value(config, "rescorer_neg_size", 30_000))
+    p.add_argument("--rescorer-checkpoint-every", type=int, default=_config_value(config, "rescorer_checkpoint_every", 50))
 
     # Training data caps
-    p.add_argument("--max-train-images",   type=int, default=_config_value(config, "max_train_images"))
+    p.add_argument("--max-train-images", type=int, default=_config_value(config, "max_train_images"))
     p.add_argument("--max-rescore-images", type=int, default=_config_value(config, "max_rescore_images"))
-    p.add_argument("--neg-patches",        type=int, default=_config_value(config, "neg_patches_per_image", 10),
+    p.add_argument("--neg-patches", type=int, default=_config_value(config, "neg_patches_per_image", 10),
                    dest="neg_patches_per_image")
-    p.add_argument("--min-box-area",       type=int, default=_config_value(config, "min_box_area", 0))
+    p.add_argument("--min-box-area", type=int, default=_config_value(config, "min_box_area", 0))
 
     # Evaluation
-    p.add_argument("--eval-pyramid-lambda", type=int,   default=_config_value(config, "eval_pyramid_lambda", 4))
-    p.add_argument("--eval-score-thresh",   type=float, default=_config_value(config, "eval_score_thresh", 0.05))
-    p.add_argument("--eval-iou-match",      type=float, default=_config_value(config, "eval_iou_match", 0.5))
-    p.add_argument("--eval-nms-iou",        type=float, default=_config_value(config, "eval_nms_iou", 0.3))
-    p.add_argument("--eval-max-images",     type=int,   default=_config_value(config, "eval_max_images"))
-    p.add_argument("--no-context",          action="store_true",
+    p.add_argument("--eval-pyramid-lambda", type=int, default=_config_value(config, "eval_pyramid_lambda", 4))
+    p.add_argument("--eval-score-thresh", type=float, default=_config_value(config, "eval_score_thresh", 0.05))
+    p.add_argument("--eval-iou-match", type=float, default=_config_value(config, "eval_iou_match", 0.5))
+    p.add_argument("--eval-nms-iou", type=float, default=_config_value(config, "eval_nms_iou", 0.3))
+    p.add_argument("--eval-max-images", type=int, default=_config_value(config, "eval_max_images"))
+    p.add_argument("--no-context", action="store_true",
                    default=bool(_config_value(config, "no_context", False)),
                    help="Disable contextual rescoring during evaluation")
-    p.add_argument("--eval-checkpoint",     default=_config_value(config, "eval_checkpoint"),
+    p.add_argument("--eval-checkpoint", default=_config_value(config, "eval_checkpoint"),
                    help="Pickle file for resumable evaluation progress")
 
     return p.parse_args(remaining)
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 
 def find_split_file(root, split_name):
     path = os.path.join(root, "ImageSets", "Main", f"{split_name}.txt")
@@ -272,7 +267,7 @@ def main():
     train_split = args.train_split or find_split_file(args.train_root, "trainval")
     test_split = args.test_split or find_split_file(args.test_root, "test")
 
-    print("Building datasets …")
+    print("Building datasets ")
     train_ds = VOCDataset(args.train_root, train_split, class_to_idx=CLASS_TO_IDX)
     test_ds = VOCDataset(args.test_root, test_split, class_to_idx=CLASS_TO_IDX)
     print(f" Train: {len(train_ds)} images | Test: {len(test_ds)} images")
@@ -309,11 +304,10 @@ def main():
     )
 
     if args.eval_only:
-        print(f"\nLoading model from {args.model_dir} …")
+        print(f"\nLoading model from {args.model_dir}")
         detector.load(args.model_dir)
     else:
-        #  Train 
-        print("\nStarting training …")
+        print("\nStarting training")
         t0 = time.time()
         detector.train(
             train_ds = train_ds,
@@ -326,14 +320,11 @@ def main():
             rescorer_checkpoint_every = args.rescorer_checkpoint_every,
         )
         print(f"\nTraining finished in {(time.time() - t0) / 60:.1f} min")
-
-        #  Save model 
         detector.save(args.model_dir)
-        print(f"Model saved → {args.model_dir}")
+        print(f"Model saved -> {args.model_dir}")
 
-    #  Evaluate on test split 
     use_context = not args.no_context
-    print(f"\nEvaluating on test split (use_context={use_context}) …")
+    print(f"\nEvaluating on test split (use_context={use_context})")
 
     ap_per_class, mean_ap = evaluate_hog_detection_ap(
         detector = detector,
