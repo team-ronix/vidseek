@@ -60,7 +60,9 @@ class MultipleNegativesRankingLoss(nn.Module):
         # (B, B) - since vectors are normalized, dot product = cosine similarity
         sim = torch.matmul(anchor_emb, positive_emb.T) / self.temperature
 
-        # Each row i should peak at column i
+        # Each row i should peak at column i (and vice versa for columns)
         labels = torch.arange(sim.size(0), device=sim.device)
 
-        return self.cross_entropy(sim, labels)
+        loss_a2p = self.cross_entropy(sim,   labels)
+        loss_p2a = self.cross_entropy(sim.T, labels)
+        return (loss_a2p + loss_p2a) / 2

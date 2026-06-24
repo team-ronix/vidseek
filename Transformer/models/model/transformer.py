@@ -52,7 +52,7 @@ class Transformer(nn.Module):
         hidden = hidden * m + (1.0 - m) * (-1e9)
         return hidden.max(dim=1).values
 
-
+    # public API 
 
     def encode(
         self,

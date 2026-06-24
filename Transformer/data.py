@@ -1,6 +1,5 @@
-﻿import re
+import re
 import os
-import random
 from collections import Counter
 
 import torch
@@ -60,7 +59,7 @@ class Vocabulary:
         return len(self.word2idx)
 
 
-# ── helper: tokenize a sentence into [CLS] body... [SEP] ids ─────────────────
+# ── helper ────────────────────────────────────────────────────────────────────
 
 def _make_ids(sentence: str, vocab: Vocabulary, max_len: int):
     cls_id = vocab.word2idx[vocab.CLS_TOKEN]
@@ -69,10 +68,108 @@ def _make_ids(sentence: str, vocab: Vocabulary, max_len: int):
     return [cls_id] + body + [sep_id]
 
 
-# ── STS regression dataset (original, kept for Spearman evaluation) ───────────
+#  AllNLI datasets 
+
+class AllNLIDataset(Dataset):
+    """(anchor, positive) pairs from AllNLI.jsonl for MNR training.
+
+    Each line: [anchor, positive, negative] — the explicit negative is
+    discarded here because MNR uses every other positive in the batch as
+    a negative for free, giving B-1 negatives per anchor per step.
+    """
+
+    def __init__(self, path: str, vocab: Vocabulary, max_len: int = 128):
+        self.pairs = []
+        df = pd.read_csv(path)
+        for _, row in df.iterrows():
+            self.pairs.append((
+                _make_ids(str(row["anchor"]),   vocab, max_len),
+                _make_ids(str(row["positive"]), vocab, max_len),
+            ))
+
+    def __len__(self):
+        return len(self.pairs)
+
+    def __getitem__(self, idx):
+        ids_a, ids_p = self.pairs[idx]
+        return (
+            torch.tensor(ids_a, dtype=torch.long),
+            torch.tensor(ids_p, dtype=torch.long),
+        )
+
+
+class AllNLITripletDataset(Dataset):
+    """(anchor, positive, negative) triplets from AllNLI.jsonl for Triplet training.
+
+    AllNLI provides explicit NLI-derived negatives (contradictions), which are
+    semantically hard by construction — far stronger than randomly sampled ones.
+    """
+
+    def __init__(self, path: str, vocab: Vocabulary, max_len: int = 128):
+        self.triplets = []
+        df = pd.read_csv(path)
+        for _, row in df.iterrows():
+            self.triplets.append((
+                _make_ids(str(row["anchor"]),   vocab, max_len),
+                _make_ids(str(row["positive"]), vocab, max_len),
+                _make_ids(str(row["negative"]), vocab, max_len),
+            ))
+
+    def __len__(self):
+        return len(self.triplets)
+
+    def __getitem__(self, idx):
+        ids_a, ids_p, ids_n = self.triplets[idx]
+        return (
+            torch.tensor(ids_a, dtype=torch.long),
+            torch.tensor(ids_p, dtype=torch.long),
+            torch.tensor(ids_n, dtype=torch.long),
+        )
+
+
+#  AllNLI labeled-pair dataset (for Contrastive / CoSENT / CosineMSE)
+
+class AllNLILabeledPairDataset(Dataset):
+    """Creates (sent_a, sent_b, label) pairs from AllNLI.
+
+    Each row contributes two samples:
+        (anchor, positive) → label 1.0
+        (anchor, negative) → label 0.0
+
+    Used by ContrastiveLoss, CoSENTLoss, and CosineMSELoss which all expect
+    a scalar label / score alongside the two sentence embeddings.
+    """
+
+    def __init__(self, path: str, vocab: Vocabulary, max_len: int = 128):
+        self.pairs = []
+        df = pd.read_csv(path)
+        for _, row in df.iterrows():
+            anchor   = _make_ids(str(row["anchor"]),   vocab, max_len)
+            positive = _make_ids(str(row["positive"]), vocab, max_len)
+            negative = _make_ids(str(row["negative"]), vocab, max_len)
+            self.pairs.append((anchor, positive, 1.0))
+            self.pairs.append((anchor, negative, 0.0))
+
+    def __len__(self):
+        return len(self.pairs)
+
+    def __getitem__(self, idx):
+        ids_a, ids_b, label = self.pairs[idx]
+        return (
+            torch.tensor(ids_a, dtype=torch.long),
+            torch.tensor(ids_b, dtype=torch.long),
+            torch.tensor(label, dtype=torch.float),
+        )
+
+
+#  STS evaluation dataset
 
 class STSDataset(Dataset):
-    """Sentence pairs with normalized similarity scores for STS evaluation."""
+    """Sentence pairs with similarity scores for Spearman evaluation.
+
+    Handles both [0, 5] and [0, 1] score scales; normalises to [-1, 1]
+    to match the cosine similarity range.
+    """
 
     def __init__(self, df: pd.DataFrame, vocab: Vocabulary, max_len: int = 128):
         self.pairs = []
@@ -85,8 +182,8 @@ class STSDataset(Dataset):
 
             score = float(row["score"]) if pd.notna(row["score"]) else 0.0
             if score > 1.0:
-                score = score / 5.0       # [0,5] → [0,1]
-            score = score * 2.0 - 1.0    # [0,1] → [-1,1]  (matches cosine range)
+                score = score / 5.0       # [0, 5] → [0, 1]
+            score = score * 2.0 - 1.0    # [0, 1] → [-1, 1]
 
             self.pairs.append((ids_a, ids_b, score))
 
@@ -102,138 +199,10 @@ class STSDataset(Dataset):
         )
 
 
-# ── Sentence pair dataset - for Multiple Negatives Ranking Loss ───────────────
-
-class SentencePairDataset(Dataset):
-    """Positive sentence pairs for MNR Loss training.
-
-    Dataset format conversion
-
-    Input:  sentence1, sentence2, score   (score in [0,1] or [0,5])
-    Output: (ids_a, ids_b) pairs where score >= pos_threshold
-
-    In-batch negatives: during a forward pass, each (a_i, p_i) pair treats
-    every other p_j in the same batch as a negative for a_i.  No explicit
-    negative labels or triplet construction needed.
-
-    Larger batches → more negatives → harder task → better embeddings.
-    """
-
-    def __init__(
-        self,
-        df: pd.DataFrame,
-        vocab: Vocabulary,
-        max_len: int   = 128,
-        pos_threshold: float = 0.65,   # score in [0,1]; pairs below this are dropped
-    ):
-        self.pairs = []
-        for _, row in df.iterrows():
-            score = float(row["score"]) if pd.notna(row["score"]) else 0.0
-            if score > 1.0:
-                score = score / 5.0   # normalize [0,5] → [0,1]
-            if score < pos_threshold:
-                continue              # skip non-positive pairs
-
-            s1 = str(row["sentence1"]) if pd.notna(row["sentence1"]) else ""
-            s2 = str(row["sentence2"]) if pd.notna(row["sentence2"]) else ""
-            self.pairs.append((_make_ids(s1, vocab, max_len),
-                               _make_ids(s2, vocab, max_len)))
-
-    def __len__(self):
-        return len(self.pairs)
-
-    def __getitem__(self, idx):
-        ids_a, ids_b = self.pairs[idx]
-        return (
-            torch.tensor(ids_a, dtype=torch.long),
-            torch.tensor(ids_b, dtype=torch.long),
-        )
-
-
-# ── Triplet dataset - for TripletLoss (alternative to MNR) ───────────────────
-
-class TripletDataset(Dataset):
-    """(anchor, positive, negative) triplets built from STS pair data.
-
-    Dataset format conversion
-
-    Input:  sentence1, sentence2, score
-    Output: (anchor, positive, negative) triplets where
-            · positive = sentence paired with score >= pos_threshold
-            · negative = sentence paired with score <= neg_threshold
-              (falls back to random sentence if no explicit negatives exist)
-
-    Hard negative mining
-    ────────────────────
-    After initial training, replace random negatives with hard negatives by
-    calling mine_hard_negatives() from evaluate_search.py.  Hard negatives
-    are sentences the model incorrectly scores as similar - they provide the
-    strongest gradient signal.
-    """
-
-    def __init__(
-        self,
-        df: pd.DataFrame,
-        vocab: Vocabulary,
-        max_len: int         = 128,
-        pos_threshold: float = 0.0,
-        neg_threshold: float = 0.3,
-    ):
-        all_sentences = list({
-            s for col in ("sentence1", "sentence2")
-            for s in df[col].fillna("").tolist()
-        })
-
-        # Build anchor → positives and anchor → negatives maps
-        positives: dict[str, list[str]] = {}
-        negatives: dict[str, list[str]] = {}
-
-        for _, row in df.iterrows():
-            score = float(row["score"]) if pd.notna(row["score"]) else 0.0
-            if score > 1.0:
-                score = score / 5.0
-            s1 = str(row["sentence1"]) if pd.notna(row["sentence1"]) else ""
-            s2 = str(row["sentence2"]) if pd.notna(row["sentence2"]) else ""
-
-            if score >= pos_threshold:
-                positives.setdefault(s1, []).append(s2)
-                positives.setdefault(s2, []).append(s1)
-            if score <= neg_threshold:
-                negatives.setdefault(s1, []).append(s2)
-                negatives.setdefault(s2, []).append(s1)
-
-        self.triplets = []
-        for anchor, pos_list in positives.items():
-            neg_pool = negatives.get(
-                anchor,
-                [s for s in all_sentences if s not in pos_list and s != anchor],
-            )
-            if not neg_pool:
-                continue
-            for pos in pos_list:
-                neg = random.choice(neg_pool)
-                self.triplets.append((
-                    _make_ids(anchor, vocab, max_len),
-                    _make_ids(pos,    vocab, max_len),
-                    _make_ids(neg,    vocab, max_len),
-                ))
-
-    def __len__(self):
-        return len(self.triplets)
-
-    def __getitem__(self, idx):
-        ids_a, ids_p, ids_n = self.triplets[idx]
-        return (
-            torch.tensor(ids_a, dtype=torch.long),
-            torch.tensor(ids_p, dtype=torch.long),
-            torch.tensor(ids_n, dtype=torch.long),
-        )
-
-
-
+#  collate functions 
 
 def collate_fn(batch):
-    """Collate for STSDataset - returns (ids_a, ids_b, mask_a, mask_b, scores)."""
+    """STSDataset → (ids_a, ids_b, mask_a, mask_b, scores)."""
     seqs_a, seqs_b, scores = zip(*batch)
     padded_a = pad_sequence(list(seqs_a), batch_first=True, padding_value=0)
     padded_b = pad_sequence(list(seqs_b), batch_first=True, padding_value=0)
@@ -245,7 +214,7 @@ def collate_fn(batch):
 
 
 def collate_pair_fn(batch):
-    """Collate for SentencePairDataset - returns (ids_a, ids_b, mask_a, mask_b)."""
+    """AllNLIDataset → (ids_a, ids_b, mask_a, mask_b)."""
     seqs_a, seqs_b = zip(*batch)
     padded_a = pad_sequence(list(seqs_a), batch_first=True, padding_value=0)
     padded_b = pad_sequence(list(seqs_b), batch_first=True, padding_value=0)
@@ -255,8 +224,20 @@ def collate_pair_fn(batch):
     )
 
 
+def collate_labeled_fn(batch):
+    """AllNLILabeledPairDataset → (ids_a, ids_b, mask_a, mask_b, labels)."""
+    seqs_a, seqs_b, labels = zip(*batch)
+    padded_a = pad_sequence(list(seqs_a), batch_first=True, padding_value=0)
+    padded_b = pad_sequence(list(seqs_b), batch_first=True, padding_value=0)
+    return (
+        padded_a, padded_b,
+        (padded_a != 0).long(), (padded_b != 0).long(),
+        torch.stack(labels),
+    )
+
+
 def collate_triplet_fn(batch):
-    """Collate for TripletDataset - returns (a, p, n, mask_a, mask_p, mask_n)."""
+    """AllNLITripletDataset → (ids_a, ids_p, ids_n, mask_a, mask_p, mask_n)."""
     seqs_a, seqs_p, seqs_n = zip(*batch)
     padded_a = pad_sequence(list(seqs_a), batch_first=True, padding_value=0)
     padded_p = pad_sequence(list(seqs_p), batch_first=True, padding_value=0)
@@ -267,159 +248,93 @@ def collate_triplet_fn(batch):
     )
 
 
+#  DataLoader factories 
 
-
-def _build_vocab(train_df: pd.DataFrame, min_freq: int) -> Vocabulary:
+def build_vocab_from_allnli(path: str, min_freq: int = 2) -> Vocabulary:
+    """Build vocabulary from all sentences (anchor + positive + negative) in AllNLI.csv."""
     vocab = Vocabulary(min_freq=min_freq)
-    vocab.build(
-        train_df["sentence1"].fillna("").tolist()
-        + train_df["sentence2"].fillna("").tolist()
+    df = pd.read_csv(path)
+    sentences = (
+        df["anchor"].tolist() + df["positive"].tolist() + df["negative"].tolist()
     )
+    vocab.build(sentences)
     return vocab
 
 
-def get_dataloaders(
-    train_path: str,
-    val_path: str,
-    test_path: str | None = None,
-    batch_size: int = 32,
-    max_len: int = 128,
-    min_freq: int = 1,
-    num_workers: int = 0,
-    pin_memory: bool = False,
-    vocab: Vocabulary | None = None,   # pass a pre-built vocab to reuse it
-):
-    """DataLoaders for STS regression / Spearman evaluation."""
-    if not os.path.exists(train_path):
-        raise FileNotFoundError(f"Train file not found: {train_path}")
-    if not os.path.exists(val_path):
-        raise FileNotFoundError(f"Validation file not found: {val_path}")
-
-    train_df = pd.read_csv(train_path, low_memory=False)
-    val_df   = pd.read_csv(val_path,   low_memory=False)
-
-    if vocab is None:
-        vocab = _build_vocab(train_df, min_freq)
-
-    loaders = {
-        "train": DataLoader(STSDataset(train_df, vocab, max_len),
-                            batch_size=batch_size, shuffle=True,
-                            collate_fn=collate_fn, num_workers=num_workers,
-                            pin_memory=pin_memory),
-        "val":   DataLoader(STSDataset(val_df, vocab, max_len),
-                            batch_size=batch_size, shuffle=False,
-                            collate_fn=collate_fn, num_workers=num_workers,
-                            pin_memory=pin_memory),
-    }
-
-    if test_path:
-        if os.path.exists(test_path):
-            test_df = pd.read_csv(test_path, low_memory=False)
-            loaders["test"] = DataLoader(
-                STSDataset(test_df, vocab, max_len),
-                batch_size=batch_size, shuffle=False,
-                collate_fn=collate_fn, num_workers=num_workers,
-                pin_memory=pin_memory,
-            )
-        else:
-            print(f"[WARNING] Test file not found: {test_path}")
-
-    return loaders, vocab
-
-
-def get_pair_dataloaders(
-    train_path: str,
-    val_path: str,
-    test_path: str | None = None,
+def get_allnli_pair_loader(
+    path: str,
+    vocab: Vocabulary,
     batch_size: int = 64,
     max_len: int = 128,
-    min_freq: int = 1,
     num_workers: int = 0,
     pin_memory: bool = False,
-    pos_threshold: float = 0.65,
-    sample_size: int | None = None,   # cap training set; None = use all
-    vocab: Vocabulary | None = None,
-):
-    """DataLoaders for MNR Loss embedding training (positive pairs only)."""
-    if not os.path.exists(train_path):
-        raise FileNotFoundError(f"Train file not found: {train_path}")
-    if not os.path.exists(val_path):
-        raise FileNotFoundError(f"Validation file not found: {val_path}")
-
-    train_df = pd.read_csv(train_path, low_memory=False)
-    val_df   = pd.read_csv(val_path,   low_memory=False)
-
-    if sample_size is not None and len(train_df) > sample_size:
-        train_df = train_df.sample(n=sample_size, random_state=42).reset_index(drop=True)
-
-    if vocab is None:
-        vocab = _build_vocab(train_df, min_freq)
-
-    loaders = {
-        "train": DataLoader(
-            SentencePairDataset(train_df, vocab, max_len, pos_threshold),
-            batch_size=batch_size, shuffle=True,
-            collate_fn=collate_pair_fn, num_workers=num_workers,
-            pin_memory=pin_memory,
-        ),
-        "val": DataLoader(
-            SentencePairDataset(val_df, vocab, max_len, pos_threshold),
-            batch_size=batch_size, shuffle=False,
-            collate_fn=collate_pair_fn, num_workers=num_workers,
-            pin_memory=pin_memory,
-        ),
-    }
-
-    if test_path and os.path.exists(test_path):
-        test_df = pd.read_csv(test_path, low_memory=False)
-        loaders["test"] = DataLoader(
-            SentencePairDataset(test_df, vocab, max_len, pos_threshold),
-            batch_size=batch_size, shuffle=False,
-            collate_fn=collate_pair_fn, num_workers=num_workers,
-            pin_memory=pin_memory,
-        )
-
-    return loaders, vocab
+) -> DataLoader:
+    """DataLoader for MNR training — (anchor, positive) pairs from AllNLI."""
+    return DataLoader(
+        AllNLIDataset(path, vocab, max_len),
+        batch_size=batch_size, shuffle=True,
+        collate_fn=collate_pair_fn,
+        num_workers=num_workers, pin_memory=pin_memory,
+    )
 
 
-def get_triplet_dataloaders(
-    train_path: str,
-    val_path: str,
-    test_path: str | None = None,
-    batch_size: int = 32,
+def get_allnli_labeled_pair_loader(
+    path: str,
+    vocab: Vocabulary,
+    batch_size: int = 64,
     max_len: int = 128,
-    min_freq: int = 1,
     num_workers: int = 0,
-    pos_threshold: float = 0.65,
-    neg_threshold: float = 0.3,
-    vocab: Vocabulary | None = None,
-):
-    """DataLoaders for TripletLoss training."""
-    train_df = pd.read_csv(train_path)
-    val_df   = pd.read_csv(val_path)
+    pin_memory: bool = False,
+) -> DataLoader:
+    """DataLoader for Contrastive/CoSENT/CosineMSE — labeled (a, b, label) pairs."""
+    return DataLoader(
+        AllNLILabeledPairDataset(path, vocab, max_len),
+        batch_size=batch_size, shuffle=True,
+        collate_fn=collate_labeled_fn,
+        num_workers=num_workers, pin_memory=pin_memory,
+    )
 
-    if vocab is None:
-        vocab = _build_vocab(train_df, min_freq)
 
-    loaders = {
-        "train": DataLoader(
-            TripletDataset(train_df, vocab, max_len, pos_threshold, neg_threshold),
-            batch_size=batch_size, shuffle=True,
-            collate_fn=collate_triplet_fn, num_workers=num_workers,
-        ),
-        "val": DataLoader(
-            TripletDataset(val_df, vocab, max_len, pos_threshold, neg_threshold),
-            batch_size=batch_size, shuffle=False,
-            collate_fn=collate_triplet_fn, num_workers=num_workers,
-        ),
-    }
+def get_allnli_triplet_loader(
+    path: str,
+    vocab: Vocabulary,
+    batch_size: int = 64,
+    max_len: int = 128,
+    num_workers: int = 0,
+    pin_memory: bool = False,
+) -> DataLoader:
+    """DataLoader for Triplet fine-tuning — (anchor, positive, negative) from AllNLI."""
+    return DataLoader(
+        AllNLITripletDataset(path, vocab, max_len),
+        batch_size=batch_size, shuffle=True,
+        collate_fn=collate_triplet_fn,
+        num_workers=num_workers, pin_memory=pin_memory,
+    )
 
-    if test_path and os.path.exists(test_path):
-        test_df = pd.read_csv(test_path)
-        loaders["test"] = DataLoader(
-            TripletDataset(test_df, vocab, max_len, pos_threshold, neg_threshold),
-            batch_size=batch_size, shuffle=False,
-            collate_fn=collate_triplet_fn, num_workers=num_workers,
-        )
 
-    return loaders, vocab
+def get_sts_loaders(
+    paths: dict,
+    vocab: Vocabulary,
+    batch_size: int = 64,
+    max_len: int = 128,
+    num_workers: int = 0,
+    pin_memory: bool = False,
+) -> dict:
+    """DataLoaders for STS evaluation.
+
+    paths example:
+        {'val':  'data/sts-222/stsb_validation.csv',
+         'test': 'data/sts-222/stsb_test.csv'}
+    """
+    loaders = {}
+    for split, path in paths.items():
+        if os.path.exists(path):
+            loaders[split] = DataLoader(
+                STSDataset(pd.read_csv(path), vocab, max_len),
+                batch_size=batch_size, shuffle=False,
+                collate_fn=collate_fn,
+                num_workers=num_workers, pin_memory=pin_memory,
+            )
+        else:
+            print(f"[WARNING] STS file not found: {path}")
+    return loaders
