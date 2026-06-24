@@ -20,6 +20,7 @@ from Storage.SQL.Repositories.VideoRepository import VideoRepository
 from Storage.SQL.Repositories.VRDRepository import VRDRepository
 from Storage.SQL.Repositories.ObjectRepository import ObjectRepository
 from Storage.SQL.Repositories.OCRRepository import OCRRepository
+from Storage.SQL.Repositories.TranscriptRepository import TranscriptRepository
 from Storage.SQL.DatabaseClient import SessionLocal
 from Storage.SQL.Models.Object import Object as ObjectModel
 from Storage.SQL.Models.ObjectVideo import ObjectVideo
@@ -149,10 +150,11 @@ def _run_pipeline(job_id: str, video_path: str, video_id: int,
         seg = SentenceSegmentation(
             video_path=video_path,
             transcript_json=transcription_path,
-            similarity_threshold=0.75,
         )
-        seg.segment()
-        transcript_segments = seg.segments
+        transcript_segments = seg.segment()
+        transcript_repo = TranscriptRepository()
+        transcript_repo.save_segments(transcript_segments, video_id)
+        transcript_repo.close()
         del seg; gc.collect()
 
         update("Embedding and storing...")
@@ -188,7 +190,7 @@ def search(q: str, top_k: int = 10):
                 sim=float(sim),
             )
             for _, meta, sim in zip(ids[0], metadatas[0], flat_similarities[0])
-            if sim > 0.5
+            if sim > 0.3
         ]
     except Exception as e:
         print(f"Error occurred while querying ChromaDB: {e}")
@@ -345,6 +347,28 @@ def search_by_vrd(
             for vrd, subj, pred, obj, video in q.all()
         ]
         return GroupedResponse(videos=_group_by_video(results), total_results=len(results))
+    finally:
+        db.close()
+
+
+@app.get("/videos/chapters")
+def get_chapters(path: str):
+    db = SessionLocal()
+    try:
+        from Storage.SQL.Models.TranscriptSegment import TranscriptSegment as TSModel
+        video = db.query(VideoModel).filter(VideoModel.file_path == path).first()
+        if not video:
+            raise HTTPException(status_code=404, detail="Video not found")
+        rows = (
+            db.query(TSModel)
+            .filter(TSModel.video_id == video.id)
+            .order_by(TSModel.start)
+            .all()
+        )
+        return [
+            {"id": r.id, "title": r.title, "start": r.start, "end": r.end, "text": r.text}
+            for r in rows
+        ]
     finally:
         db.close()
 

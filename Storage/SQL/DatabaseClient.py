@@ -18,4 +18,5 @@ def init_db():
     import Storage.SQL.Models.VRDPredicate
     import Storage.SQL.Models.OCRWords
     import Storage.SQL.Models.VectorMetadata
+    import Storage.SQL.Models.TranscriptSegment
     Base.metadata.create_all(bind=engine)

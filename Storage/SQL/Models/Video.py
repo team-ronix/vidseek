@@ -12,4 +12,5 @@ class Video(Base):
     object_videos = relationship("ObjectVideo", back_populates="video", overlaps="objects")
     objects = relationship("Object", secondary="object_videos", back_populates="videos", overlaps="object_videos")
     vrd_videos = relationship("VRDVideo", back_populates="video")
-    ocr_words = relationship("OCRWord", back_populates="video")
+    ocr_words            = relationship("OCRWord",            back_populates="video")
+    transcript_segments  = relationship("TranscriptSegment",  back_populates="video")

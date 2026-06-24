@@ -1,6 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+﻿@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
 
-/* ── Tokens ───────────────────────────────────────────────── */
+/* â”€â”€ Tokens â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 :root {
   --bg:          #f3f4f6;
   --surface:     #ffffff;
@@ -30,7 +30,7 @@
   --font: 'Inter', system-ui, sans-serif;
 }
 
-/* ── Reset ────────────────────────────────────────────────── */
+/* â”€â”€ Reset â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   background: var(--bg);
@@ -45,14 +45,14 @@ button { cursor: pointer; font-family: inherit; }
 select { font-family: inherit; }
 .sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }
 
-/* ── App shell ────────────────────────────────────────────── */
+/* â”€â”€ App shell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .app {
   max-width: 1100px;
   margin: 0 auto;
   padding: 0 24px 80px;
 }
 
-/* ── Header ───────────────────────────────────────────────── */
+/* â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .app-header {
   display: flex;
   align-items: center;
@@ -89,7 +89,7 @@ select { font-family: inherit; }
 .upload-toggle:hover { border-color: var(--accent); color: var(--accent); }
 .upload-toggle.active { background: var(--accent-light); border-color: var(--accent-mid); color: var(--accent); }
 
-/* ── Upload panel ─────────────────────────────────────────── */
+/* â”€â”€ Upload panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .upload-panel {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -133,7 +133,7 @@ select { font-family: inherit; }
 }
 .upload-reset:hover { border-color: var(--accent); color: var(--accent); }
 
-/* ── OCR model selector ────────────────────────────────────── */
+/* â”€â”€ OCR model selector â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .ocr-options       { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
 .ocr-option-row    { display: flex; align-items: center; gap: 8px; }
 .ocr-option-label  {
@@ -154,7 +154,7 @@ select { font-family: inherit; }
 .ocr-pill:hover          { border-color: var(--accent); color: var(--accent); }
 .ocr-pill.active         { background: var(--accent-light); border-color: var(--accent-mid); color: var(--accent); }
 
-/* ── Section eyebrow ──────────────────────────────────────── */
+/* â”€â”€ Section eyebrow â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .section-eyebrow {
   display: block;
   font-size: 11px;
@@ -165,7 +165,7 @@ select { font-family: inherit; }
   margin-bottom: 10px;
 }
 
-/* ── Text search row ──────────────────────────────────────── */
+/* â”€â”€ Text search row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .text-search-row {
   margin-bottom: 20px;
 }
@@ -178,7 +178,7 @@ select { font-family: inherit; }
   box-shadow: var(--shadow-sm);
 }
 
-/* ── Search bar ───────────────────────────────────────────── */
+/* â”€â”€ Search bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .search-wrap { position: relative; margin-bottom: 12px; }
 
 .search-input {
@@ -208,7 +208,7 @@ select { font-family: inherit; }
   pointer-events: none;
 }
 
-/* ── Inline source pills ──────────────────────────────────── */
+/* â”€â”€ Inline source pills â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .search-panel-inline {
   display: flex;
   align-items: center;
@@ -240,7 +240,7 @@ select { font-family: inherit; }
 .source-pill:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
 .source-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
-/* ── Two-panel row ────────────────────────────────────────── */
+/* â”€â”€ Two-panel row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .panels-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -252,7 +252,7 @@ select { font-family: inherit; }
   .panels-row { grid-template-columns: 1fr; }
 }
 
-/* ── Side panel (Object / VRD) ────────────────────────────── */
+/* â”€â”€ Side panel (Object / VRD) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .side-panel {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -315,7 +315,7 @@ select { font-family: inherit; }
   padding: 4px 0;
 }
 
-/* ── Select dropdown ──────────────────────────────────────── */
+/* â”€â”€ Select dropdown â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .select-wrap { position: relative; }
 
 .select {
@@ -345,7 +345,7 @@ select { font-family: inherit; }
   display: flex;
 }
 
-/* ── Object chips ─────────────────────────────────────────── */
+/* â”€â”€ Object chips â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .object-chips {
   display: flex;
   flex-wrap: wrap;
@@ -373,7 +373,7 @@ select { font-family: inherit; }
   padding: 0 4px;
 }
 
-/* ── VRD fields ───────────────────────────────────────────── */
+/* â”€â”€ VRD fields â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .vrd-fields { display: flex; flex-direction: column; gap: 11px; }
 .vrd-field  { display: flex; flex-direction: column; gap: 4px; }
 .field-label { font-size: 11px; font-weight: 600; color: var(--text-2); letter-spacing: .03em; text-transform: uppercase; }
@@ -404,7 +404,7 @@ select { font-family: inherit; }
 }
 .triple-sep { font-size: 11px; color: var(--border-2); }
 
-/* ── Results section ──────────────────────────────────────── */
+/* â”€â”€ Results section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .results-section { }
 
 .results-section-header {
@@ -436,7 +436,7 @@ select { font-family: inherit; }
 
 .results-list { display: flex; flex-direction: column; gap: 8px; }
 
-/* ── Result card ──────────────────────────────────────────── */
+/* â”€â”€ Result card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .result-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -497,7 +497,7 @@ select { font-family: inherit; }
   border: 1px solid var(--accent-mid);
 }
 
-/* ── Type badges ──────────────────────────────────────────── */
+/* â”€â”€ Type badges â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .type-badge {
   display: inline-block;
   font-size: 10px;
@@ -513,7 +513,7 @@ select { font-family: inherit; }
 .type-badge.type-object     { background: var(--tag-object-bg);     color: var(--tag-object); }
 .type-badge.type-vrd        { background: var(--tag-vrd-bg);        color: var(--tag-vrd); }
 
-/* ── State panels ─────────────────────────────────────────── */
+/* â”€â”€ State panels â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .state-panel {
   text-align: center;
   padding: 48px 0;
@@ -524,7 +524,7 @@ select { font-family: inherit; }
 .state-glyph { font-size: 30px; margin-bottom: 10px; color: var(--border-2); }
 .state-sub   { font-size: 11px; margin-top: 4px; color: var(--text-3); }
 
-/* ── Animations ───────────────────────────────────────────── */
+/* â”€â”€ Animations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(5px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -539,7 +539,7 @@ select { font-family: inherit; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .spin { animation: spin .7s linear infinite; }
 
-/* ── Video card (search result grouped by video) ──────────── */
+/* â”€â”€ Video card (search result grouped by video) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .video-card {
   display: flex;
   align-items: center;
@@ -603,7 +603,7 @@ select { font-family: inherit; }
   flex-shrink: 0;
 }
 
-/* ── Video player view ────────────────────────────────────── */
+/* â”€â”€ Video player view â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .video-player-view { display: flex; flex-direction: column; gap: 14px; }
 
 .back-btn {
@@ -699,10 +699,59 @@ select { font-family: inherit; }
 }
 .video-result-item:hover .video-result-play { color: var(--accent); }
 
-/* ── Responsive ───────────────────────────────────────────── */
+/* â”€â”€ Responsive â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 @media (max-width: 600px) {
   .app { padding: 0 14px 60px; }
   .app-header { padding: 16px 0; }
   .text-search-bar { padding: 14px; }
   .side-panel { padding: 14px; }
+}
+
+/* -- Video tabs ------------------------------------------ */
+.video-tabs {
+  display: flex;
+  gap: 6px;
+}
+
+.video-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: border-color .13s, color .13s, background .13s;
+}
+.video-tab:hover { border-color: var(--accent-mid); color: var(--accent); }
+.video-tab.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-light);
+}
+
+/* -- Chapter items --------------------------------------- */
+.chapter-item { align-items: flex-start; }
+
+.chapter-index {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-light);
+  border: 1px solid var(--accent-mid);
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.chapter-title {
+  font-weight: 600;
 }

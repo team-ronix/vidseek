@@ -1,4 +1,4 @@
-const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+﻿const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export function getVideoStreamUrl(path) {
   return `${BASE}/video/stream?path=${encodeURIComponent(path)}`;
@@ -10,7 +10,7 @@ async function request(url) {
   return res.json();
 }
 
-// ── Text search (ChromaDB: OCR + transcript) ──────────────────
+// â”€â”€ Text search (ChromaDB: OCR + transcript) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export async function searchVideos(query, topK = 20) {
   return request(`/search?q=${encodeURIComponent(query)}&top_k=${topK}`);
 }
@@ -19,7 +19,7 @@ export async function searchByOCR(query) {
   return request(`/search/ocr?q=${encodeURIComponent(query)}`);
 }
 
-// ── Structured search ─────────────────────────────────────────
+// â”€â”€ Structured search â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export async function searchByObject(objectKey) {
   return request(`/search/object?key=${encodeURIComponent(objectKey)}`);
 }
@@ -32,7 +32,7 @@ export async function searchByVRD({ subject, object, relation }) {
   return request(`/search/vrd?${params}`);
 }
 
-// ── Dropdown population ───────────────────────────────────────
+// â”€â”€ Dropdown population â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export async function getAllObjects() {
   return request('/objects');            // [{ id, key }]
 }
@@ -41,7 +41,7 @@ export async function getAllVRDOptions() {
   return request('/vrd/options');        // { subjects, relations, objects }
 }
 
-// ── Upload + job polling ──────────────────────────────────────
+// â”€â”€ Upload + job polling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export async function getJobStatus(jobId) {
   return request(`/jobs/${jobId}`);
 }
@@ -64,4 +64,9 @@ export function uploadVideo(file, onProgress, options = {}) {
     xhr.open('POST', `${BASE}/videos/upload`);
     xhr.send(form);
   });
+}
+
+// -- Chapters ------------------------------------------
+export async function getChapters(videoPath) {
+  return request(`/videos/chapters?path=${encodeURIComponent(videoPath)}`);
 }
