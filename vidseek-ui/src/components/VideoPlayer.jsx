@@ -79,6 +79,9 @@ export function VideoPlayer({ video, onBack }) {
               >
                 <span className={`type-badge type-${r.type}`}>{r.type}</span>
                 <span className="video-result-text">{r.text}</span>
+                {r.model_name && (
+                  <span className="video-result-model">{r.model_name}</span>
+                )}
                 {start && (
                   <span className="video-result-time">
                     <Clock size={11} />

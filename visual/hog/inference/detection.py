@@ -112,7 +112,7 @@ def detect(
         cls, comp = task
         dets, sc = multiscale_detect_one_comp(detector, pyramid, comp)
         return cls, dets, sc
-    n_workers = min(len(tasks), os.cpu_count() or 4)
+    n_workers = min(len(tasks), 2)
     with ThreadPoolExecutor(max_workers=n_workers) as executor:
         comp_results = list(executor.map(_score_comp, tasks))
     cls_dets_map = defaultdict(lambda: ([], []))

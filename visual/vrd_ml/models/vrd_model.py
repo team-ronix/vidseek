@@ -166,6 +166,7 @@ class VRDModel:
         labels: List[str],
         scores: Optional[List[float]] = None,
         top_k: Optional[int] = None,
+        min_prob: float = 0.0,
     ) -> List[RelationshipTriplet]:
         if scores is None:
             scores = [1.0] * len(boxes)
@@ -193,6 +194,8 @@ class VRDModel:
             if self.language_prior is not None:
                 rescored = []
                 for pred_name, prob in pair_preds:
+                    if prob < min_prob:
+                        continue
                     prior_p = self.language_prior.score(subj.label, obj.label, pred_name)
                     combined = prob * (prior_p ** self.prior_weight)
                     rescored.append((pred_name, combined))
@@ -217,11 +220,12 @@ class VRDModel:
         self,
         ann: ImageAnnotation,
         image: np.ndarray,
+        min_prob: float = 0.0,
     ) -> List[Dict]:
         boxes = [[o.bbox.x1, o.bbox.y1, o.bbox.x2, o.bbox.y2] for o in ann.objects]
         labels = [o.label for o in ann.objects]
         scores = [o.score for o in ann.objects]
-        triplets = self.predict(image, boxes, labels, scores)
+        triplets = self.predict(image, boxes, labels, scores, min_prob=min_prob)
         return [
             {
                 "subj": t.subject.label,

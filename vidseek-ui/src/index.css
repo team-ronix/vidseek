@@ -676,6 +676,17 @@ select { font-family: inherit; }
   white-space: nowrap;
 }
 
+.video-result-model{
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border-2);
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
 .video-result-time {
   display: flex;
   align-items: center;
