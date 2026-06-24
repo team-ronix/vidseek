@@ -7,7 +7,7 @@ class TripletLoss(nn.Module):
     """Triplet Margin Loss for sentence embeddings.
 
     Mathematical formulation
-    ────────────────────────
+
     Given L2-normalized (anchor a, positive p, negative n):
 
     Cosine distance:  d(x, y) = 1 − cos_sim(x, y)
@@ -16,7 +16,7 @@ class TripletLoss(nn.Module):
         ℓ = max( d(a, p) − d(a, n) + margin,  0 )
           = max( sim(a, n) − sim(a, p) + margin,  0 )
 
-    The loss is zero — no gradient — when the positive is already at least
+    The loss is zero - no gradient - when the positive is already at least
     `margin` more similar than the negative:
         sim(a, p) − sim(a, n) ≥ margin  →  ℓ = 0
 
@@ -27,9 +27,9 @@ class TripletLoss(nn.Module):
     `margin` separates them on the sphere surface.
 
     Comparison with MNR Loss
-    ────────────────────────
+
     · Triplet uses 1 negative per anchor per step.
-    · MNR uses (B−1) negatives per anchor per step — far more gradient signal.
+    · MNR uses (B−1) negatives per anchor per step - far more gradient signal.
     · Triplet suffers from "easy negative collapse": once simple triplets are
       satisfied the loss is 0 everywhere and training stalls. Hard negative
       mining is required to keep learning.
@@ -37,8 +37,8 @@ class TripletLoss(nn.Module):
       prefer MultipleNegativesRankingLoss.
 
     Hyperparameter guidance
-    ────────────────────────
-    · margin = 0.3–0.5  — start here; increase if embeddings collapse
+
+    · margin = 0.3–0.5  - start here; increase if embeddings collapse
     · Cosine space: margins are in [-2, 2] (d = 1 − sim ∈ [0, 2])
     """
 
@@ -48,9 +48,9 @@ class TripletLoss(nn.Module):
 
     def forward(
         self,
-        anchor:   torch.Tensor,   # (B, d) — L2 normalized
-        positive: torch.Tensor,   # (B, d) — L2 normalized
-        negative: torch.Tensor,   # (B, d) — L2 normalized
+        anchor:   torch.Tensor,   # (B, d) - L2 normalized
+        positive: torch.Tensor,   # (B, d) - L2 normalized
+        negative: torch.Tensor,   # (B, d) - L2 normalized
     ) -> torch.Tensor:
         sim_pos = F.cosine_similarity(anchor, positive, dim=-1)   # (B,)
         sim_neg = F.cosine_similarity(anchor, negative, dim=-1)   # (B,)

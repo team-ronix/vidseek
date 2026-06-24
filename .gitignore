@@ -124,3 +124,9 @@ Transformer/**/__pycache__/
 Transformer/**/*.csv
 Transformer/**/*.pt
 Transformer/**/*.pkl
+
+*.pth
+
+eval_data/
+visual/**/*.pkl
+visual/**/*.npy

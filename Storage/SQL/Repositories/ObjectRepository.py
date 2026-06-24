@@ -24,13 +24,13 @@ class ObjectRepository:
             for object_key, occurrences in inverted_index.items():
                 obj = self._get_or_create_object(object_key)
                 for occ in occurrences:
+                    print(f"frame time is : {occ.get("frame_time")}")
                     exists = (
                         self.db.query(ObjectVideo)
                         .filter(
                             ObjectVideo.object_id == obj.id,
                             ObjectVideo.video_id  == video_id,
-                            ObjectVideo.start_time == occ.get("start_time"),
-                            ObjectVideo.end_time   == occ.get("end_time"),
+                            ObjectVideo.frame_time == occ.get("frame_time")
                         ).first()
                     )
                     if exists:
@@ -40,6 +40,7 @@ class ObjectRepository:
                         video_id=video_id,
                         start_time=occ.get("start_time"),
                         end_time=occ.get("end_time"),
+                        frame_time = occ.get("frame_time")
                     ))
             self.db.commit()
         except Exception:
@@ -65,6 +66,7 @@ class ObjectRepository:
                 "video_id":   ov.video_id,
                 "video_path": video.file_path,
                 "start_time": ov.start_time,
+                "frame_time" : ov.frame_time,
                 "end_time":   ov.end_time,
             }
             for ov, obj, video in rows

@@ -15,5 +15,7 @@ def init_db():
     import Storage.SQL.Models.VRDVideo
     import Storage.SQL.Models.VRDObject 
     import Storage.SQL.Models.VRDSubject
-    import Storage.SQL.Models.VRDPredicate 
+    import Storage.SQL.Models.VRDPredicate
+    import Storage.SQL.Models.OCRWords
+    import Storage.SQL.Models.VectorMetadata
     Base.metadata.create_all(bind=engine)

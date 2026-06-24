@@ -203,27 +203,30 @@ class SceneSegmenter:
         self.video_path =video_path
         self.threshold= threshold
         self.min_shot_len= min_shot_len
-        self.scenes_list =[]
+        self.scenes_list = []
         self.middleFrames = []
+        self._scene_shots = {}
 
     def segment_video(self, threshold=None):
         if threshold is None:
             threshold = self.threshold
-        self.scenes_list =[]
-        self.middleFrames= []
-        shots,total_frames,fps=detectShots(self.video_path,threshold, self.min_shot_len)
-        feats=extractFeatures(self.video_path, shots)
-        dist_mat=compute_dist_matrix(feats)
-        num_scenes=estimate_number_ofCuts(dist_mat)
-        N=len(shots)
-        boundaries = normalizedCostClustering(N,num_scenes,dist_mat)
-        groups=getCuts(boundaries, num_scenes)
+        self.scenes_list = []
+        self.middleFrames = []
+        self._scene_shots = {}
+        shots, total_frames, fps = detectShots(self.video_path, threshold, self.min_shot_len)
+        feats = extractFeatures(self.video_path, shots)
+        dist_mat = compute_dist_matrix(feats)
+        num_scenes = estimate_number_ofCuts(dist_mat)
+        N = len(shots)
+        boundaries = normalizedCostClustering(N, num_scenes, dist_mat)
+        groups = getCuts(boundaries, num_scenes)
 
         intervals = [(shots[f][0], shots[l][1]) for f, l in groups]
         if intervals:
-            intervals[-1] = (intervals[-1][0], total_frames-1)
+            intervals[-1] = (intervals[-1][0], total_frames - 1)
 
-        for i, (start_f, end_f) in enumerate(intervals):
+        for i, ((start_f, end_f), (first_shot, last_shot)) in enumerate(zip(intervals, groups)):
+            self._scene_shots[i] = shots[first_shot : last_shot + 1]
             self.scenes_list.append(Scene(
                 index=i,
                 start_time=start_f / fps,
@@ -235,39 +238,26 @@ class SceneSegmenter:
 
         return self.scenes_list
 
-    def calculate_frames_to_extract(self, scene):
-        """
-        Calculate which frames to extract based on scene duration.
-        """
-        duration = scene.duration
-        start_frame = scene.start_frame
-        end_frame = scene.end_frame
-        total_frames = end_frame-start_frame
-        if total_frames <= 0:
-            return [start_frame]
-        if duration < 2.0:
-            return [start_frame+total_frames // 2]
-        if duration < 5.0:
-            return [
-            start_frame+int(total_frames * 0.33),
-                start_frame+int(total_frames*0.67),
-            ]
+    def _shot_starts_in_scene(self, cap, scene) -> list[int]:
+        """HSV change detection within a single scene's frame range.
+        Always returns at least [scene.start_frame]."""
+        cap.set(cv2.CAP_PROP_POS_FRAMES, scene.start_frame)
+        starts = [scene.start_frame]
+        prev_hsv = None
 
-        if duration < 10.0:
-            return [
-            start_frame+int(total_frames * 0.25),
-                start_frame+int(total_frames * 0.50),
-                start_frame+int(total_frames * 0.75),
-            ]
+        for fi in range(scene.start_frame, scene.end_frame + 1):
+            ret, frame = cap.read()
+            if not ret:
+                break
+            small = cv2.resize(frame, (160, 90))
+            hsv = cv2.cvtColor(small, cv2.COLOR_BGR2HSV)
+            if prev_hsv is not None:
+                diff = np.abs(hsv.astype(np.int32) - prev_hsv.astype(np.int32)).mean()
+                if diff > self.threshold and (fi - starts[-1]) >= self.min_shot_len:
+                    starts.append(fi)
+            prev_hsv = hsv
 
-        frames_per_interval = max(1, int(scene.fps * 3))
-
-        num_frames = min(5, max(1, total_frames // frames_per_interval))
-        
-        return [
-            start_frame+int(total_frames * (i+1) / (num_frames+1))
-            for i in range(num_frames)
-        ]
+        return starts
 
     def extract_frames(self):
         """
@@ -281,23 +271,26 @@ class SceneSegmenter:
 
         self.middleFrames = []
         cap = cv2.VideoCapture(self.video_path)
+        fps = cap.get(cv2.CAP_PROP_FPS)
 
         if not cap.isOpened():
             print(f"Error: could not open {self.video_path}")
             return []
 
         for scene in self.scenes_list:
-            frame_numbers = self.calculate_frames_to_extract(scene)
+            frame_numbers = self._shot_starts_in_scene(cap, scene)
             for frame_num in frame_numbers:
                 cap.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
                 ret, frame = cap.read()
+                
                 if ret:
                     self.middleFrames.append({
-                    'scene_index': scene.index,
+                        'scene_index': scene.index,
                         'frame_number': frame_num,
+                        'frame_time': frame_num / fps,
                         'frame': frame,
                         'scene': scene,
-                            'frame_count_in_scene': len(frame_numbers),
+                        'frame_count_in_scene': len(frame_numbers),
                     })
                 else:
                     print(f"Warning: could not read frame {frame_num} (scene {scene.index})")

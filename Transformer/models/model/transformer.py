@@ -41,18 +41,18 @@ class Transformer(nn.Module):
         self.pooling = pooling
         self.encoder = Encoder(vocab_size, d_model, n_layers, n_heads, d_ff, max_len, dropout)
 
-    # ── pooling ───────────────────────────────────────────────────────────────
+
 
     def _pool(self, hidden: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-        """hidden: (B, T, d)  mask: (B, T) — 1=real token, 0=padding"""
+        """hidden: (B, T, d)  mask: (B, T) - 1=real token, 0=padding"""
         m = mask.unsqueeze(-1).float()
         if self.pooling == "mean":
             return (hidden * m).sum(dim=1) / m.sum(dim=1).clamp(min=1e-9)
-        # max — padding positions are set to -∞ so they never win
+        # max - padding positions are set to -∞ so they never win
         hidden = hidden * m + (1.0 - m) * (-1e9)
         return hidden.max(dim=1).values
 
-    # ── public API ────────────────────────────────────────────────────────────
+    # public API 
 
     def encode(
         self,
@@ -86,7 +86,7 @@ class Transformer(nn.Module):
         attention_mask: torch.Tensor | None = None,
         normalize: bool = True,
     ) -> torch.Tensor:
-        """Forward pass — returns sentence embeddings (not similarity scores).
+        """Forward pass - returns sentence embeddings (not similarity scores).
 
         Calling model(ids) is equivalent to model.encode(ids).
         """

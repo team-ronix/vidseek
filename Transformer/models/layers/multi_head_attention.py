@@ -3,7 +3,7 @@ from models.layers.scale_dot_product_attention import ScaleDotProductAttention
 
 
 class MultiHeadAttention(nn.Module):
-    """Multi-Head Attention — 'Attention Is All You Need', Section 3.2.2.
+    """Multi-Head Attention - 'Attention Is All You Need', Section 3.2.2.
 
     MultiHead(Q, K, V) = Concat(head_1, ..., head_h) · W_O
     where head_i = Attention(Q·W_Q_i, K·W_K_i, V·W_V_i)

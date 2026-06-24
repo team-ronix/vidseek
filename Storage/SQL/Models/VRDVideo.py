@@ -1,4 +1,4 @@
-from sqlalchemy import Column, ForeignKey, Integer
+from sqlalchemy import Column, ForeignKey, Integer, Float
 from sqlalchemy.orm import relationship
 from Storage.SQL.Models.Base import Base
 
@@ -11,6 +11,7 @@ class VRDVideo(Base):
     object_id = Column(Integer, ForeignKey("vrd_objects.id"), nullable=False, index=True)
     video_id = Column(Integer, ForeignKey("videos.id"), nullable=False, index=True)
     start_time = Column(Integer)
+    frame_time = Column(Float)
     end_time = Column(Integer)
 
     subject = relationship("VRDSubject", back_populates="vrd_videos")

@@ -1,32 +1,45 @@
-import os
+﻿import os
+import sys
 import uuid
 import threading
 from pathlib import Path
 from typing import Optional
-
+from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
+import OCR.utils.ovo_svm as ovo_svm
+
+sys.modules["ovo_svm"] = ovo_svm
 
 from Transformer import Transformer
-from Storage.ChromaDBVectorStore import ChromaDBVectorStore
+from Storage.CustomVectorStore import CustomVectorStore
+from Storage.HNSW import HNSWVectorStore
 from Storage.SQL.Repositories.VideoRepository import VideoRepository
 from Storage.SQL.Repositories.VRDRepository import VRDRepository
 from Storage.SQL.Repositories.ObjectRepository import ObjectRepository
+from Storage.SQL.Repositories.OCRRepository import OCRRepository
 from Storage.SQL.DatabaseClient import SessionLocal
-
+from Storage.SQL.Models.Object import Object as ObjectModel
+from Storage.SQL.Models.ObjectVideo import ObjectVideo
+from Storage.SQL.Models.VRDSubject import VRDSubject
+from Storage.SQL.Models.VRDPredicate import VRDPredicate
+from Storage.SQL.Models.VRDObject import VRDObject
+from Storage.SQL.Models.VRDVideo import VRDVideo
+from Storage.SQL.Models.Video import Video as VideoModel
 import gc
 import torch
 from visual.SceneSegmenter import SceneSegmenter
-from OCR.OCR import OCR
-from visual.ObjectDetector import ObjectDetector
+from OCR.src.OCR import OCR
+from visual.faster_rcnn.ObjectDetector import ObjectDetector
 from visual.VRD import VRD
 from audio.ASR import ASR
 from audio.SentenceSegmenter import SentenceSegmentation
 
 UPLOAD_DIR = Path("./videos")
 UPLOAD_DIR.mkdir(exist_ok=True)
+load_dotenv()
 
 app = FastAPI(title="VidSeek API")
 
@@ -41,19 +54,49 @@ app.add_middleware(
 _jobs: dict[str, dict] = {}
 
 
-# ── Pydantic schemas ──────────────────────────────────────────────────────────
+# Pydantic schemas
 
 class SearchResult(BaseModel):
     type: str           # "ocr" | "transcript" | "object" | "vrd"
     text: str
     video_path: str
     start_time: float
+    frame_time: Optional[float] = None
     end_time: float
-    score: float        # distance for ChromaDB results; 1.0 for SQL results
+    sim: float         # similarity score; higher is better
+
+class VideoGroup(BaseModel):
+    video_path: str
+    video_name: str
+    match_count: int
+    results: list[SearchResult]
 
 class SearchResponse(BaseModel):
     query: str
     results: list[SearchResult]
+    videos: list[VideoGroup]
+
+class GroupedResponse(BaseModel):
+    videos: list[VideoGroup]
+    total_results: int
+
+def _group_by_video(results: list[SearchResult]) -> list[VideoGroup]:
+    groups: dict[str, dict] = {}
+    for r in results:
+        vp = r.video_path
+        if vp not in groups:
+            groups[vp] = {
+                "video_path": vp,
+                "video_name": Path(vp).name,
+                "match_count": 0,
+                "results": [],
+            }
+        groups[vp]["match_count"] += 1
+        groups[vp]["results"].append(r)
+    return [
+        VideoGroup(**g)
+        for g in sorted(groups.values(), key=lambda g: g["match_count"], reverse=True)
+    ]
 
 def _run_pipeline(job_id: str, video_path: str, video_id: int):
     def update(msg: str, status: str = "running"):
@@ -70,19 +113,19 @@ def _run_pipeline(job_id: str, video_path: str, video_id: int):
         del segmenter; gc.collect()
 
         update("OCR processing...")
-        ocr = OCR(frames, video_path)
+        ocr = OCR(frames, video_path, video_id)
         ocr.process_frames()
         ocr_index = ocr.get_inverted_index()
         del ocr; gc.collect()
 
         update("Object detection...")
-        obj_det = ObjectDetector(video_path, frames, model_name="yolo26l.pt")
+        obj_det = ObjectDetector(video_path, frames)
         obj_det.detect_objects()
         ObjectRepository().save_from_inverted_index(obj_det.get_inverted_index(), video_id)
         del obj_det; gc.collect()
 
         update("Visual relationship detection...")
-        vrd = VRD(frames=frames, video_path=video_path, model_id="llava-hf/llava-1.5-7b-hf")
+        vrd = VRD(frames=frames, video_path=video_path, api_key=os.getenv("GEMINI_TOKEN"))
         vrd.detect_relationships()
         VRDRepository().save_from_inverted_index(vrd.get_inverted_index(), video_id)
         del vrd
@@ -91,7 +134,7 @@ def _run_pipeline(job_id: str, video_path: str, video_id: int):
         gc.collect()
 
         update("Audio transcription...")
-        asr = ASR(video_path=video_path, model_name="openai/whisper-large-v3")
+        asr = ASR(video_path=video_path, model_name="openai/whisper-small")
         asr.transcribe(task="translate")
         transcription_path = os.path.join(json_folder, f"{video_id}_transcription.json")
         asr.save_transcription(transcription_path)
@@ -111,9 +154,11 @@ def _run_pipeline(job_id: str, video_path: str, video_id: int):
         del seg; gc.collect()
 
         update("Embedding and storing...")
-        transformer = Transformer(ocr_index, transcript_segments, model_id="all-MiniLM-L6-v2")
+        transformer = Transformer(ocr_index, transcript_segments)
         transformer.transform()
-        transformer.save_embeddings(ChromaDBVectorStore())
+        hnsw_store = HNSWVectorStore()
+        transformer.save_embeddings(hnsw_store)
+        hnsw_store.commit()  # flush vectors + graph to disk atomically
 
         update("Done", status="done")
 
@@ -126,52 +171,28 @@ def search(q: str, top_k: int = 10):
     if not q.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty")
 
-    transformer = Transformer({}, [], model_id="all-MiniLM-L6-v2")
+    transformer = Transformer({}, [])
     embedding = transformer.transform_single_text(q)
-
+    embedding = embedding.tolist()
     try:
-        ids, metadatas, distances = ChromaDBVectorStore().query(embedding, top_k=top_k)
-        chroma_results = [
+        ids, metadatas, flat_similarities = HNSWVectorStore().query(embedding, top_k=top_k)
+        vector_results = [
             SearchResult(
                 type=meta.get("type", "unknown"),
                 text=meta.get("text", ""),
                 video_path=meta.get("video_path", ""),
                 start_time=float(meta.get("start_time", 0)),
                 end_time=float(meta.get("end_time", 0)),
-                score=float(dist),
+                sim=float(sim),
             )
-            for _, meta, dist in zip(ids[0], metadatas[0], distances[0])
+            for _, meta, sim in zip(ids[0], metadatas[0], flat_similarities[0])
+            if sim > 0.5
         ]
-    except Exception:
-        chroma_results = []
-
-    # Postgres: object + VRD keyword hits
-    sql_rows: list[dict] = []
-    try:
-        sql_rows += ObjectRepository().search(q)
-        sql_rows += VRDRepository().search(q)
-    except Exception:
-        pass
-
-    video_repo = VideoRepository()
-    sql_results = []
-    for row in sql_rows:
-        video_path = row.get("video_path", "")
-        if not video_path and row.get("video_id"):
-            video = video_repo.get_video_by_id(row["video_id"])
-            video_path = video.file_path if video else ""
-        sql_results.append(SearchResult(
-            type=row["type"],
-            text=row["text"],
-            video_path=video_path,
-            start_time=float(row.get("start_time") or 0),
-            end_time=float(row.get("end_time") or 0),
-            score=1.0,
-        ))
-    video_repo.close()
-
-    results = sorted(chroma_results + sql_results, key=lambda r: r.score)
-    return SearchResponse(query=q, results=results)
+    except Exception as e:
+        print(f"Error occurred while querying ChromaDB: {e}")
+        vector_results = []
+        
+    return SearchResponse(query=q, results=vector_results, videos=_group_by_video(vector_results))
 
 @app.post("/videos/upload")
 async def upload_video(file: UploadFile = File(...)):
@@ -206,11 +227,10 @@ def get_job_status(job_id: str):
     return job
 
 
-# ── Object & VRD option endpoints ─────────────────────────────────────────────
+# Object & VRD option endpoints
 
 @app.get("/objects")
 def list_objects():
-    from Storage.SQL.Models.Object import Object as ObjectModel
     db = SessionLocal()
     try:
         rows = db.query(ObjectModel).order_by(ObjectModel.key).all()
@@ -221,82 +241,114 @@ def list_objects():
 
 @app.get("/vrd/options")
 def list_vrd_options():
-    from Storage.SQL.Models.VRDSubject   import VRDSubject
-    from Storage.SQL.Models.VRDPredicate import VRDPredicate
-    from Storage.SQL.Models.VRDObject    import VRDObject
+    
     db = SessionLocal()
     try:
         return {
-            "subjects":  [r.key for r in db.query(VRDSubject).order_by(VRDSubject.key).all()],
+            "subjects": [r.key for r in db.query(VRDSubject).order_by(VRDSubject.key).all()],
             "relations": [r.key for r in db.query(VRDPredicate).order_by(VRDPredicate.key).all()],
-            "objects":   [r.key for r in db.query(VRDObject).order_by(VRDObject.key).all()],
+            "objects": [r.key for r in db.query(VRDObject).order_by(VRDObject.key).all()],
         }
     finally:
         db.close()
 
 
-@app.get("/search/object")
+@app.get("/search/ocr")
+def search_by_ocr(q: str, video_id: Optional[int] = None):
+    repo = OCRRepository()
+    try:
+        word, confidence = repo.find_closest_word_video(q, video_id)
+        if word is None:
+            return []
+        return [{
+            "type": "ocr",
+            "text": word.word,
+            "video_path": word.video.file_path,
+            "video_name": word.video.file_name,
+            "start_time": word.start_time,
+            "end_time": word.end_time,
+            "score": confidence,
+        }]
+    finally:
+        repo.close()
+
+
+
+@app.get("/search/object", response_model=GroupedResponse)
 def search_by_object(key: str):
-    from Storage.SQL.Models.Object      import Object as ObjectModel
-    from Storage.SQL.Models.ObjectVideo import ObjectVideo
-    from Storage.SQL.Models.Video       import Video as VideoModel
     db = SessionLocal()
     try:
         rows = (
             db.query(ObjectVideo, ObjectModel, VideoModel)
             .join(ObjectModel, ObjectVideo.object_id == ObjectModel.id)
-            .join(VideoModel,  ObjectVideo.video_id  == VideoModel.id)
+            .join(VideoModel, ObjectVideo.video_id == VideoModel.id)
             .filter(ObjectModel.key == key)
             .all()
         )
-        return [
-            {
-                "type":       "object",
-                "text":       obj.key,
-                "video_path": video.file_path,
-                "video_name": video.file_name,
-                "start_time": ov.start_time,
-                "end_time":   ov.end_time,
-            }
+        results = [
+            SearchResult(
+                type="object",
+                text=obj.key,
+                video_path=video.file_path,
+                frame_time=float(ov.frame_time or 0),
+                start_time=float(ov.start_time or 0),
+                end_time=float(ov.end_time or 0),
+                sim=0.0,
+            )
             for ov, obj, video in rows
         ]
+        return GroupedResponse(videos=_group_by_video(results), total_results=len(results))
     finally:
         db.close()
 
 
-@app.get("/search/vrd")
+@app.get("/search/vrd", response_model=GroupedResponse)
 def search_by_vrd(
-    subject:  Optional[str] = None,
-    object:   Optional[str] = None,
+    subject: Optional[str] = None,
+    object: Optional[str] = None,
     relation: Optional[str] = None,
 ):
-    from Storage.SQL.Models.VRDSubject   import VRDSubject
-    from Storage.SQL.Models.VRDPredicate import VRDPredicate
-    from Storage.SQL.Models.VRDObject    import VRDObject
-    from Storage.SQL.Models.VRDVideo     import VRDVideo
-    from Storage.SQL.Models.Video        import Video as VideoModel
     db = SessionLocal()
     try:
         q = (
             db.query(VRDVideo, VRDSubject, VRDPredicate, VRDObject, VideoModel)
-            .join(VRDSubject,   VRDVideo.subject_id   == VRDSubject.id)
+            .join(VRDSubject, VRDVideo.subject_id == VRDSubject.id)
             .join(VRDPredicate, VRDVideo.predicate_id == VRDPredicate.id)
-            .join(VRDObject,    VRDVideo.object_id    == VRDObject.id)
-            .join(VideoModel,   VRDVideo.video_id     == VideoModel.id)
+            .join(VRDObject, VRDVideo.object_id == VRDObject.id)
+            .join(VideoModel, VRDVideo.video_id == VideoModel.id)
         )
-        if subject:  q = q.filter(VRDSubject.key   == subject)
+        if subject: q = q.filter(VRDSubject.key == subject)
         if relation: q = q.filter(VRDPredicate.key == relation)
-        if object:   q = q.filter(VRDObject.key    == object)
-        return [
-            {
-                "type":       "vrd",
-                "text":       f"{subj.key} — {pred.key} — {obj.key}",
-                "video_path": video.file_path,
-                "video_name": video.file_name,
-                "start_time": vrd.start_time,
-                "end_time":   vrd.end_time,
-            }
+        if object: q = q.filter(VRDObject.key == object)
+        results = [
+            SearchResult(
+                type="vrd",
+                text=f"{subj.key} - {pred.key} - {obj.key}",
+                video_path=video.file_path,
+                start_time=float(vrd.start_time or 0),
+                end_time=float(vrd.end_time or 0),
+                frame_time=float(vrd.frame_time or 0), 
+                sim=0.0,
+            )
             for vrd, subj, pred, obj, video in q.all()
         ]
+        return GroupedResponse(videos=_group_by_video(results), total_results=len(results))
     finally:
         db.close()
+
+
+@app.get("/video/stream")
+def stream_video(path: str):
+    p = Path(path)
+    if not p.is_absolute():
+        p = Path(".") / p
+    p = p.resolve()
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="Video not found")
+    ext = p.suffix.lower()
+    media_types = {
+        ".mp4": "video/mp4", ".webm": "video/webm",
+        ".avi": "video/x-msvideo", ".mov": "video/quicktime",
+        ".mkv": "video/x-matroska",
+    }
+    return FileResponse(str(p), media_type=media_types.get(ext, "video/mp4"))

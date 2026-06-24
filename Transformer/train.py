@@ -1,214 +1,171 @@
+"""3-phase training: MNR pretraining -> eval -> Triplet fine-tuning"""
+
+import json
 import os
-import math
 import pickle
+
 import torch
-import torch.nn as nn
-from scipy.stats import spearmanr
-from tqdm import tqdm
 
-from data import get_pair_dataloaders, get_dataloaders
-from models.model.transformer import Transformer
+from data import build_vocab_from_allnli, get_allnli_pair_loader, get_allnli_triplet_loader, get_sts_loaders
+from evaluate_search import evaluate
 from losses.mnr_loss import MultipleNegativesRankingLoss
-
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
-
-CONFIG = {
-    # data
-    "train_path":    "data/stsb_train.csv",
-    "val_path":      "data/stsb_validation.csv",
-    "test_path":     "data/stsb_test.csv",
-    "pos_threshold": 0.65,
-    "max_len":       128,
-    "batch_size":    64,
-    "sample_size":   None,   # cap training pairs; None = use all
-    "min_freq":      2,
-    "num_workers":   0,      # 2-4 on Linux/Kaggle; 0 on Windows
-    "pin_memory":    True,   # auto-disabled when no CUDA
-
-    # model
-    "d_model":   256,
-    "n_layers":  4,
-    "n_heads":   4,          # d_k = 64 (256 // 4)
-    "d_ff":      512,
-    "dropout":   0.1,
-    "pooling":   "mean",
-
-    # MNR loss
-    # temperature=0.15 prevents representation collapse on small batches.
-    # The common default 0.05 is designed for batch >= 512 and pre-trained models;
-    # with batch=64 and a randomly initialised model it creates gradients too large
-    # for the early stages of training, causing collapse after epoch 1.
-    "temperature": 0.15,
-
-    # optimiser
-    "peak_lr":      3e-4,
-    "weight_decay": 0.01,
-    "warmup_steps": 100,
-
-    # training
-    "epochs":    20,
-    "clip_grad": 1.0,
-
-    # checkpointing
-    "checkpoint_dir":    "checkpoints",
-    "checkpoint_latest": "checkpoints/checkpoint_latest.pt",
-    "save_path":         "best_model.pt",
-}
+from losses.triplet_loss import TripletLoss
+from models.model.transformer import Transformer
+from trainer import Trainer
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+CONFIG = {
+    # data paths
+    "allnli_path": "data/AllNLI/AllNLI.csv",
+    "val_path":    "data/sts-222/stsb_validation.csv",
+    "test_path":   "data/sts-222/stsb_test.csv",
+    "vocab_path":  "vocab.pkl",
+    "max_len":     128,
+    "min_freq":    2,
+    "num_workers": 0,
+    "pin_memory":  True,
+    "batch_size":  128,
 
-# ---------------------------------------------------------------------------
-# LR schedule: linear warmup -> cosine decay to zero
-# ---------------------------------------------------------------------------
+    # model
+    "d_model":  384,
+    "n_layers": 6,
+    "n_heads":  6,
+    "d_ff":     1536,
+    "dropout":  0.1,
+    "pooling":  "mean",
 
-def make_cosine_with_warmup(total_steps, warmup_steps):
-    def lr_lambda(current_step):
-        if current_step < warmup_steps:
-            return float(current_step) / max(1, warmup_steps)
-        progress = float(current_step - warmup_steps) / max(1, total_steps - warmup_steps)
-        return max(0.0, 0.5 * (1.0 + math.cos(math.pi * progress)))
-    return lr_lambda
+    # phase 1 - MNR
+    "mnr_epochs":       20,
+    "mnr_peak_lr":      3e-4,
+    "mnr_warmup_steps": 100,
+    "mnr_weight_decay": 0.01,
+    "mnr_clip_grad":    1.0,
+    "mnr_temperature":  0.05,
 
+    # phase 2 - eval
+    "pos_threshold":     0.3,
+    "eval_results_path": "eval_results.json",
 
-# ---------------------------------------------------------------------------
-# Checkpoint helpers
-# ---------------------------------------------------------------------------
+    # phase 3 - triplet fine-tuning
+    "triplet_epochs":    5,
+    "triplet_lr":        5e-5,
+    "triplet_margin":    0.5,
+    "triplet_clip_grad": 1.0,
 
-def save_checkpoint(path, model, optimizer, scheduler, epoch, step, best_rho, history):
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    torch.save({
-        "epoch":                epoch,
-        "global_step":          step,
-        "model_state_dict":     model.state_dict(),
-        "optimizer_state_dict": optimizer.state_dict(),
-        "scheduler_state_dict": scheduler.state_dict(),
-        "best_val_rho":         best_rho,
-        "train_loss_history":   history,
-    }, path)
-
-
-def load_checkpoint(path, model, optimizer, scheduler, total_epochs):
-    """Return (start_epoch, global_step, best_val_rho, history).
-
-    Returns (0, 0, -1.0, []) when: no file, corrupt file, or saved run
-    already completed all epochs (stale checkpoint from a previous run).
-    """
-    if not os.path.exists(path):
-        return 0, 0, -1.0, []
-    try:
-        ckpt = torch.load(path, map_location="cpu")
-        saved_epoch = int(ckpt.get("epoch", 0))
-        if saved_epoch >= total_epochs:
-            # Checkpoint from a completed run -- ignore it so we train fresh.
-            print(f"  Stale checkpoint (epoch {saved_epoch} of {total_epochs} already done) -- starting fresh.")
-            return 0, 0, -1.0, []
-        model.load_state_dict(ckpt["model_state_dict"])
-        optimizer.load_state_dict(ckpt["optimizer_state_dict"])
-        scheduler.load_state_dict(ckpt["scheduler_state_dict"])
-        step     = int(ckpt.get("global_step", 0))
-        best_rho = float(ckpt.get("best_val_rho", -1.0))
-        history  = ckpt.get("train_loss_history", [])
-        print(f"  Loaded checkpoint: epoch={saved_epoch}  step={step}  best_rho={best_rho:.4f}")
-        return saved_epoch, step, best_rho, history
-    except Exception as exc:
-        print(f"  WARNING: checkpoint load failed ({exc}) -- starting from scratch")
-        return 0, 0, -1.0, []
+    # checkpoints
+    "best_model_path":  "best_model.pt",
+    "final_model_path": "final_triplet_model.pt",
+    "checkpoint_path":  "checkpoints/checkpoint_latest.pt",
+}
 
 
-# ---------------------------------------------------------------------------
-# Evaluation
-# ---------------------------------------------------------------------------
+# phase 1: train with MNR loss on AllNLI pairs
+def phase1_mnr(model, vocab, val_loader, cfg, device):
+    print("\n" + "=" * 60)
+    print("Phase 1 -- MNR Training on AllNLI")
+    print("=" * 60)
 
-@torch.no_grad()
-def spearman_on_sts(model, loader, device):
-    model.eval()
-    all_preds, all_targets = [], []
-    for ids_a, ids_b, mask_a, mask_b, scores in tqdm(loader, desc="Eval ", leave=False):
-        emb_a = model.encode(ids_a.to(device), mask_a.to(device), normalize=True)
-        emb_b = model.encode(ids_b.to(device), mask_b.to(device), normalize=True)
-        all_preds.append((emb_a * emb_b).sum(-1).cpu())
-        all_targets.append(scores)
-    preds   = torch.cat(all_preds).numpy()
-    targets = torch.cat(all_targets).numpy()
-    if preds.std() == 0 or targets.std() == 0:
-        return 0.0
-    rho, _ = spearmanr(preds, targets)
-    return float(rho) if rho == rho else 0.0
+    pin = cfg["pin_memory"] and torch.cuda.is_available()
+    train_loader = get_allnli_pair_loader(
+        path=cfg["allnli_path"], vocab=vocab,
+        batch_size=cfg["batch_size"], max_len=cfg["max_len"],
+        num_workers=cfg["num_workers"], pin_memory=pin,
+    )
+    print(f"Training pairs: {len(train_loader.dataset):,}")  # type: ignore
 
-
-# ---------------------------------------------------------------------------
-# Training loop
-# ---------------------------------------------------------------------------
-
-def train_epoch(model, loader, optimizer, scheduler, criterion, device, start_step=0):
-    model.train()
-    total_loss = 0.0
-    step = start_step
-    for ids_a, ids_b, mask_a, mask_b in tqdm(loader, desc="Train", leave=False):
-        optimizer.zero_grad()
-        emb_a = model.encode(ids_a.to(device), mask_a.to(device), normalize=True)
-        emb_b = model.encode(ids_b.to(device), mask_b.to(device), normalize=True)
-        loss  = criterion(emb_a, emb_b)
-        loss.backward()
-        nn.utils.clip_grad_norm_(model.parameters(), CONFIG["clip_grad"])
-        optimizer.step()
-        scheduler.step()
-        step      += 1
-        total_loss += loss.item()
-    return total_loss / max(len(loader), 1), step
+    trainer_cfg = {
+        "epochs":          cfg["mnr_epochs"],
+        "peak_lr":         cfg["mnr_peak_lr"],
+        "warmup_steps":    cfg["mnr_warmup_steps"],
+        "weight_decay":    cfg["mnr_weight_decay"],
+        "clip_grad":       cfg["mnr_clip_grad"],
+        "checkpoint_path": cfg["checkpoint_path"],
+        "best_model_path": cfg["best_model_path"],
+        "loader_type":     "pair",
+    }
+    criterion = MultipleNegativesRankingLoss(cfg["mnr_temperature"])
+    trainer = Trainer(model, criterion, train_loader, val_loader, device, trainer_cfg)
+    best_rho = trainer.fit()
+    print(f"\nPhase 1 done.  Best val Spearman = {best_rho:.4f}")
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
+# phase 2: evaluate best MNR checkpoint on sts-222
+def phase2_evaluate(model, vocab, cfg, device):
+    print("\n" + "=" * 60)
+    print("Phase 2 -- Evaluation on sts-222")
+    print("=" * 60)
+
+    model.load_state_dict(torch.load(cfg["best_model_path"], map_location=device))
+
+    results = {}
+    for split, path in [("val", cfg["val_path"]), ("test", cfg["test_path"])]:
+        if not os.path.exists(path):
+            print(f"  [SKIP] {path} not found")
+            continue
+        print(f"\n  {split.upper()} -- {path}")
+        metrics = evaluate(
+            model=model, csv_path=path, vocab=vocab,
+            max_len=cfg["max_len"], device=device,
+            pos_threshold=cfg["pos_threshold"],
+        )
+        results[split] = metrics
+        print(f"  Recall@1={metrics['recall@1']:.4f}  Recall@5={metrics['recall@5']:.4f}  "
+              f"Recall@10={metrics['recall@10']:.4f}  MRR={metrics['mrr']:.4f}  "
+              f"Spearman={metrics['spearman']:.4f}")
+
+    with open(cfg["eval_results_path"], "w") as f:
+        json.dump(results, f, indent=2)
+    print(f"\n  Results saved to {cfg['eval_results_path']}")
+
+
+# phase 3: fine-tune on AllNLI triplets
+def phase3_triplet(model, vocab, val_loader, cfg, device):
+    print("\n" + "=" * 60)
+    print("Phase 3 -- Triplet Fine-tuning on AllNLI")
+    print("=" * 60)
+
+    pin = cfg["pin_memory"] and torch.cuda.is_available()
+    train_loader = get_allnli_triplet_loader(
+        path=cfg["allnli_path"], vocab=vocab,
+        batch_size=cfg["batch_size"], max_len=cfg["max_len"],
+        num_workers=cfg["num_workers"], pin_memory=pin,
+    )
+    print(f"Training triplets: {len(train_loader.dataset):,}")  # type: ignore
+
+    trainer_cfg = {
+        "epochs":          cfg["triplet_epochs"],
+        "peak_lr":         cfg["triplet_lr"],
+        "warmup_steps":    100,
+        "weight_decay":    cfg["mnr_weight_decay"],
+        "clip_grad":       cfg["triplet_clip_grad"],
+        "checkpoint_path": "checkpoints/triplet_finetune_ckpt.pt",
+        "best_model_path": cfg["final_model_path"],
+        "loader_type":     "triplet",
+    }
+    criterion = TripletLoss(margin=cfg["triplet_margin"])
+    trainer = Trainer(model, criterion, train_loader, val_loader, device, trainer_cfg)
+    trainer.fit()
+    print(f"\nPhase 3 done.  Saved {cfg['final_model_path']}")
+
 
 def main():
-    os.makedirs(CONFIG["checkpoint_dir"], exist_ok=True)
-
-    print(f"Device      : {DEVICE}")
-    print(f"Loss        : MNR  temperature={CONFIG['temperature']}")
-    print(f"d_model={CONFIG['d_model']}  n_layers={CONFIG['n_layers']}  "
-          f"n_heads={CONFIG['n_heads']}  d_ff={CONFIG['d_ff']}")
-
-    print("\nLoading data ...")
+    os.makedirs(os.path.dirname(CONFIG["checkpoint_path"]) or ".", exist_ok=True)
     pin = CONFIG["pin_memory"] and torch.cuda.is_available()
 
-    pair_loaders, vocab = get_pair_dataloaders(
-        train_path=CONFIG["train_path"],
-        val_path=CONFIG["val_path"],
-        test_path=CONFIG["test_path"],
-        batch_size=CONFIG["batch_size"],
-        max_len=CONFIG["max_len"],
-        pos_threshold=CONFIG["pos_threshold"],
-        min_freq=CONFIG["min_freq"],
-        sample_size=CONFIG["sample_size"],
-        num_workers=CONFIG["num_workers"],
-        pin_memory=pin,
+    print(f"Device: {DEVICE}")
+
+    print("\nBuilding vocabulary from AllNLI ...")
+    vocab = build_vocab_from_allnli(CONFIG["allnli_path"], min_freq=CONFIG["min_freq"])
+    print(f"Vocab size: {len(vocab):,}")
+    with open(CONFIG["vocab_path"], "wb") as f:
+        pickle.dump(vocab, f)
+
+    sts_loaders = get_sts_loaders(
+        paths={"val": CONFIG["val_path"], "test": CONFIG["test_path"]},
+        vocab=vocab, batch_size=CONFIG["batch_size"], max_len=CONFIG["max_len"],
+        num_workers=CONFIG["num_workers"], pin_memory=pin,
     )
-    sts_loaders, _ = get_dataloaders(
-        train_path=CONFIG["train_path"],
-        val_path=CONFIG["val_path"],
-        test_path=CONFIG["test_path"],
-        batch_size=CONFIG["batch_size"],
-        max_len=CONFIG["max_len"],
-        vocab=vocab,
-        num_workers=CONFIG["num_workers"],
-        pin_memory=pin,
-    )
-
-    steps_per_epoch = len(pair_loaders["train"])
-    total_steps     = CONFIG["epochs"] * steps_per_epoch
-
-    with open("vocab.pkl", "wb") as _vf:
-        pickle.dump(vocab, _vf)
-
-    print(f"Vocab size    : {len(vocab):,}  (saved to vocab.pkl)")
-    print(f"Train pairs   : {len(pair_loaders['train'].dataset):,}")  # type: ignore[arg-type]
-    print(f"Val STS pairs : {len(sts_loaders['val'].dataset):,}")  # type: ignore[arg-type]
-    print(f"Steps/epoch   : {steps_per_epoch}   total: {total_steps}")
 
     model = Transformer(
         vocab_size=len(vocab),
@@ -220,78 +177,11 @@ def main():
         dropout=CONFIG["dropout"],
         pooling=CONFIG["pooling"],
     ).to(DEVICE)
+    print(f"Parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}\n")
 
-    n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"Parameters    : {n_params:,}\n")
-
-    criterion = MultipleNegativesRankingLoss(CONFIG["temperature"])
-
-    decay_params, no_decay_params = [], []
-    for name, param in model.named_parameters():
-        if not param.requires_grad:
-            continue
-        if "bias" in name or "norm" in name:
-            no_decay_params.append(param)
-        else:
-            decay_params.append(param)
-
-    optimizer = torch.optim.AdamW(
-        [
-            {"params": decay_params,    "weight_decay": CONFIG["weight_decay"]},
-            {"params": no_decay_params, "weight_decay": 0.0},
-        ],
-        lr=CONFIG["peak_lr"],
-        betas=(0.9, 0.999),
-        eps=1e-8,
-    )
-    scheduler = torch.optim.lr_scheduler.LambdaLR(
-        optimizer,
-        lr_lambda=make_cosine_with_warmup(total_steps, CONFIG["warmup_steps"]),
-    )
-
-    ckpt_path = CONFIG["checkpoint_latest"]
-    start_epoch, global_step, best_val_rho, loss_history = load_checkpoint(
-        ckpt_path, model, optimizer, scheduler, CONFIG["epochs"]
-    )
-
-    if start_epoch > 0:
-        print(f"Resuming from epoch {start_epoch + 1}/{CONFIG['epochs']}")
-    else:
-        print("Starting training from scratch")
-
-    for epoch in range(start_epoch + 1, CONFIG["epochs"] + 1):
-        train_loss, global_step = train_epoch(
-            model, pair_loaders["train"], optimizer, scheduler,
-            criterion, DEVICE, start_step=global_step,
-        )
-        val_rho    = spearman_on_sts(model, sts_loaders["val"], DEVICE)
-        current_lr = scheduler.get_last_lr()[0]
-
-        print(
-            f"Epoch {epoch:02d}/{CONFIG['epochs']}  "
-            f"lr={current_lr:.2e}  "
-            f"| MNR loss={train_loss:.4f}  "
-            f"| Val Spearman={val_rho:.4f}"
-        )
-
-        loss_history.append({"epoch": epoch, "loss": train_loss, "val_rho": val_rho})
-
-        save_checkpoint(
-            ckpt_path, model, optimizer, scheduler,
-            epoch, global_step, best_val_rho, loss_history,
-        )
-
-        if val_rho > best_val_rho:
-            best_val_rho = val_rho
-            torch.save(model.state_dict(), CONFIG["save_path"])
-            print(f"  * Best model saved  (val Spearman = {best_val_rho:.4f})")
-
-    print(f"\nTraining done.  Best Val Spearman = {best_val_rho:.4f}")
-
-    if "test" in sts_loaders:
-        model.load_state_dict(torch.load(CONFIG["save_path"], map_location=DEVICE))
-        test_rho = spearman_on_sts(model, sts_loaders["test"], DEVICE)
-        print(f"Test Spearman = {test_rho:.4f}")
+    phase1_mnr(model, vocab, sts_loaders["val"], CONFIG, DEVICE)
+    phase2_evaluate(model, vocab, CONFIG, DEVICE)
+    phase3_triplet(model, vocab, sts_loaders["val"], CONFIG, DEVICE)
 
 
 if __name__ == "__main__":

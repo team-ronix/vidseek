@@ -1,5 +1,9 @@
 const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
+export function getVideoStreamUrl(path) {
+  return `${BASE}/video/stream?path=${encodeURIComponent(path)}`;
+}
+
 async function request(url) {
   const res = await fetch(`${BASE}${url}`);
   if (!res.ok) throw new Error(`Request failed: ${res.status} ${url}`);
@@ -9,6 +13,10 @@ async function request(url) {
 // ── Text search (ChromaDB: OCR + transcript) ──────────────────
 export async function searchVideos(query, topK = 20) {
   return request(`/search?q=${encodeURIComponent(query)}&top_k=${topK}`);
+}
+
+export async function searchByOCR(query) {
+  return request(`/search/ocr?q=${encodeURIComponent(query)}`);
 }
 
 // ── Structured search ─────────────────────────────────────────

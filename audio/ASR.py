@@ -37,6 +37,11 @@ class ASR:
             device=0 if self.device == "cuda:0" else -1,
         )
 
+    def _filter_characters(self, text):
+        allowed_characters = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .,!?;:'\"-()[]{}")
+        filtered_text = ''.join(c for c in text if c in allowed_characters)
+        return filtered_text
+    
     def extract_audio_from_video(self):
         try:
             audio, err = (
@@ -62,7 +67,7 @@ class ASR:
         audio = self.get_audio()
 
         with torch.no_grad():
-            with torch.cuda.amp.autocast(enabled=(self.device == "cuda:0")):
+            with torch.amp.autocast('cuda', enabled=(self.device == "cuda:0")):
                 self.result = self.pipe(
                     audio,
                     chunk_length_s=20,  
@@ -72,6 +77,9 @@ class ASR:
                 )
 
         torch.cuda.empty_cache()
+        self.result['text'] = self._filter_characters(self.result['text'])
+        for chunk in self.result['chunks']:
+            chunk['text'] = self._filter_characters(chunk['text'])
 
     def get_text(self):
         if self.result is None:

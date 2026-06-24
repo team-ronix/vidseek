@@ -1,19 +1,29 @@
 from visual.SceneSegmenter import SceneSegmenter
-from OCR.OCR import OCR
+import sys
+import OCR.utils.ovo_svm as ovo_svm
+
+sys.modules["ovo_svm"] = ovo_svm
+
+from visual.SceneSegmenter import SceneSegmenter
+from OCR.src.OCR import OCR
 from audio.ASR import ASR
-from visual.ObjectDetector import ObjectDetector
+from visual.faster_rcnn.ObjectDetector import ObjectDetector
 from visual.VRD import VRD
 from audio.SentenceSegmenter import SentenceSegmentation
 from Transformer import Transformer
-from Storage.ChromaDBVectorStore import ChromaDBVectorStore
+from Storage.CustomVectorStore import CustomVectorStore
+from Storage.HNSW import HNSWVectorStore
 from Storage.SQL.Repositories.VideoRepository import VideoRepository
 from Storage.SQL.Repositories.VRDRepository import VRDRepository
 from Storage.SQL.Repositories.ObjectRepository import ObjectRepository
+from Storage.SQL.DatabaseClient import init_db
 import os
-import sys
 import gc
 import torch
 import argparse
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def run(args):
     videos_folder = args.videos_folder
@@ -27,8 +37,7 @@ def run(args):
         print(f"Error: Video file not found at {video_path}")
         sys.exit(1)
 
-    # ── 0. Register video in Postgres ────────────────────────────────────────────
-    from Storage.SQL.DatabaseClient import init_db
+
     init_db()
     print("Registering video in database...")
     video_repo = VideoRepository()
@@ -42,7 +51,7 @@ def run(args):
     print(f"Video ID: {video_id}")
     video_repo.close()
 
-    # ── 1. Visual Processing ──────────────────────────────────────────────────────
+
     print("Video segmentation processing...")
     scene_segmenter = SceneSegmenter(video_path)
     scenes = scene_segmenter.segment_video()
@@ -58,7 +67,7 @@ def run(args):
 
     # OCR
     print("\nStarting OCR processing...")
-    ocr_processor = OCR(frames, video_path)
+    ocr_processor = OCR(frames, video_path, video_id)
     ocr_processor.process_frames()
     ocr_index_path = os.path.join(json_folder, args.ocr_output_path)
     ocr_processor.save_inverted_index(ocr_index_path)
@@ -69,9 +78,9 @@ def run(args):
         torch.cuda.empty_cache()
     gc.collect()
 
-    # Object detection → Postgres
+    # Object detection -> Postgres
     print("\nObject detection processing...")
-    object_detector = ObjectDetector(video_path, frames, model_name='yolo26l.pt')
+    object_detector = ObjectDetector(video_path, frames)
     object_detector.detect_objects()
     object_index_path = os.path.join(json_folder, args.object_output_path)
     object_detector.save_inverted_index(object_index_path)
@@ -86,7 +95,7 @@ def run(args):
         torch.cuda.empty_cache()
     gc.collect()
 
-    # VRD → Postgres
+    # VRD -> Postgres
     print("\nVisual relationship detection processing...")
     vrd_processor = VRD(frames=frames, video_path=video_path, api_key=os.getenv("GEMINI_TOKEN"))
     vrd_processor.detect_relationships()
@@ -103,9 +112,9 @@ def run(args):
         torch.cuda.empty_cache()
     gc.collect()
 
-    # ── 2. Audio Processing ───────────────────────────────────────────────────────
+
     print("\nAudio transcription processing...")
-    asr_processor = ASR(video_path=video_path, model_name='openai/whisper-large-v3')
+    asr_processor = ASR(video_path=video_path, model_name='openai/whisper-small')
     asr_processor.transcribe(task="translate")
     asr_processor.save_transcription(os.path.join(json_folder, args.transcription_output_path))
 
@@ -114,7 +123,7 @@ def run(args):
         torch.cuda.empty_cache()
     gc.collect()
 
-    # ── 3. Sentence Segmentation ──────────────────────────────────────────────────
+
     print("\nSentence segmentation processing...")
     seg_processor = SentenceSegmentation(
         video_path=video_path,
@@ -130,17 +139,20 @@ def run(args):
         torch.cuda.empty_cache()
     gc.collect()
 
-    # ── 4. Embed OCR + Transcript → ChromaDB ─────────────────────────────────────
+
     print("\nEmbedding OCR and transcript results...")
-    transformer = Transformer(ocr_inverted_index, transcript_segments, model_id='all-MiniLM-L6-v2')
+    transformer = Transformer(ocr_inverted_index, transcript_segments)
     transformer.transform()
-    transformer.save_embeddings(ChromaDBVectorStore())
+    hnsw_store = HNSWVectorStore()
+    transformer.save_embeddings(hnsw_store)
+    hnsw_store.commit()  # flush vectors + graph to disk atomically
 
     print(f"Generated {len(transformer.get_embeddings())} total embeddings")
     print("\nPipeline completed successfully!")
 
 
 if __name__ == "__main__":
+    print("Starting video processing pipeline...")
     parser = argparse.ArgumentParser(description="Run the video processing pipeline")
     parser.add_argument("--videos-folder", default="videos",
                         help="Path to videos folder")

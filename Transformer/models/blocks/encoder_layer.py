@@ -4,7 +4,7 @@ from models.layers.position_wise_feed_forward import PositionWiseFeedForward
 
 
 class EncoderLayer(nn.Module):
-    """Single encoder layer — 'Attention Is All You Need', Section 3.1.
+    """Single encoder layer - 'Attention Is All You Need', Section 3.1.
 
     Each layer has two sublayers:
       1. Multi-head self-attention
