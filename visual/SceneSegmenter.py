@@ -199,7 +199,7 @@ def getCuts(J, K):
 
 
 class SceneSegmenter:
-    def __init__(self, video_path, threshold=30, min_shot_len=10):
+    def __init__(self, video_path, threshold=15, min_shot_len=10):
         self.video_path =video_path
         self.threshold= threshold
         self.min_shot_len= min_shot_len

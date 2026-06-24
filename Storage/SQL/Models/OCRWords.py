@@ -11,5 +11,7 @@ class OCRWord(Base):
     start_time = Column(Integer)
     end_time = Column(Integer)
     frame_number = Column(Integer)
+    word_detection_model = Column(String, nullable=False)
+    word_recognition_model = Column(String, nullable=False)
 
     video = relationship("Video", back_populates="ocr_words")

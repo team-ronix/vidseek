@@ -133,6 +133,27 @@ select { font-family: inherit; }
 }
 .upload-reset:hover { border-color: var(--accent); color: var(--accent); }
 
+/* ── OCR model selector ────────────────────────────────────── */
+.ocr-options       { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.ocr-option-row    { display: flex; align-items: center; gap: 8px; }
+.ocr-option-label  {
+  font-size: 11px; font-weight: 500; letter-spacing: .4px;
+  text-transform: uppercase; color: var(--text-3);
+  width: 70px; flex-shrink: 0;
+}
+.ocr-pills { display: flex; gap: 4px; }
+.ocr-pill {
+  padding: 3px 11px;
+  font-size: 11px; font-weight: 500;
+  border: 1px solid var(--border-2);
+  border-radius: 20px;
+  background: none;
+  color: var(--text-2);
+  transition: border-color .15s, color .15s, background .15s;
+}
+.ocr-pill:hover          { border-color: var(--accent); color: var(--accent); }
+.ocr-pill.active         { background: var(--accent-light); border-color: var(--accent-mid); color: var(--accent); }
+
 /* ── Section eyebrow ──────────────────────────────────────── */
 .section-eyebrow {
   display: block;

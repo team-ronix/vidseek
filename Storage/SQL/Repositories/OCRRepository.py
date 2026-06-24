@@ -8,7 +8,7 @@ class OCRRepository:
     def __init__(self):
         self.db = SessionLocal()
 
-    def save_word(self, word: str, video_id: int, start_time: float, end_time: float, frame_number: int):
+    def save_word(self, word: str, video_id: int, start_time: float, end_time: float, frame_number: int, word_detection_model: str, word_recognition_model: str):
         exists = (
             self.db.query(OCRWord)
             .filter(
@@ -25,6 +25,8 @@ class OCRRepository:
                 start_time=int(start_time),
                 end_time=int(end_time),
                 frame_number=frame_number,
+                word_detection_model=word_detection_model,
+                word_recognition_model=word_recognition_model
             ))
             self.db.commit()
 

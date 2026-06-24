@@ -17,8 +17,8 @@ def rec(word: str, target: str, dp: list[list[int]],i: int, j: int) -> int:
     insert_cost = rec(word, target, dp, i, j + 1)
     delete_cost = rec(word, target, dp, i + 1, j)
     replace_cost = rec(word, target, dp, i + 1, j + 1)
-    dp[i][j] =  min(insert_cost, delete_cost, replace_cost)
-    return dp[i][j] + 1
+    dp[i][j] =  1 + min(insert_cost, delete_cost, replace_cost)
+    return dp[i][j]
 
 def get_edit_distance(target, word):
     dp = [[-1 for _ in range(len(target) + 1)] for _ in range(len(word) + 1)]
@@ -27,12 +27,12 @@ def get_edit_distance(target, word):
     return edit_distance, confidence
 
 
-def find_closest_word(words, target):
+def find_closest_word(word_rows, target):
     closest_word = -1
     highest_confidence = -1.0
 
-    for i, word in enumerate(words):
-        edit_distance, confidence = get_edit_distance(target.lower(), word.word.lower())
+    for i, word_row in enumerate(word_rows):
+        edit_distance, confidence = get_edit_distance(target.lower(), word_row.word.lower())
         if confidence > highest_confidence:
             highest_confidence = confidence
             closest_word = i

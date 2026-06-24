@@ -11,34 +11,82 @@ from ..utils.ovo_svm import OvO_SVM
 from ..utils.Hog import HoG, calc_gradients, predict_char
 from ..utils.MSER import merge_boxes, sort_word_chars, remove_image_border_box, remove_holes, remove_large_boxes
 from ..utils.text_detector import extract_word_images
+from ..utils.craft import CRAFT, extract_word_images_craft
 from Storage.SQL.Repositories.OCRRepository import OCRRepository
 
 _OCR_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _EAST_MODEL_PATH = os.path.join(_OCR_DIR, 'models', 'frozen_east_text_detection.pb')
 _SVM_MODEL_DIR = os.path.join(_OCR_DIR, 'models', 'from_scratch_SVM')
+_CRAFT_MODEL_PATH = os.path.join(_OCR_DIR, 'models', 'CRAFT_dynamic_5k', 'craft_epoch4_dynamic_5k.pth')
+
 
 class OCR:
-    def __init__(self, frames, video_path, video_id):
+    def __init__(self, frames, video_path, video_id,
+                 detector='craft', recognizer='easyocr'):
+        """
+        detector  : 'east' | 'craft'
+        recognizer: 'mser' | 'easyocr'
+        """
         self.frames = frames
         self.video_path = video_path
         self.inverted_index = {}
         self.video_id = video_id
+        self.detector = detector
+        self.recognizer = recognizer
 
-        self.net = cv2.dnn.readNet(_EAST_MODEL_PATH)
-        self.mser = cv2.MSER_create()
-        self.mser.setMinArea(100)
-        self.model = OvO_SVM().load(_SVM_MODEL_DIR)
-        self.le = joblib.load(os.path.join(_SVM_MODEL_DIR, 'OvO_SVM_label_encoder.joblib'))
+        #  Text detector 
+        if detector == 'east':
+            self.net = cv2.dnn.readNet(_EAST_MODEL_PATH)
+
+        elif detector == 'craft':
+            import torch
+            self.craft_device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            self.craft_model = CRAFT()
+            ckpt = torch.load(_CRAFT_MODEL_PATH, map_location=self.craft_device)
+            state_dict = ckpt['model_state_dict'] if isinstance(ckpt, dict) and 'model_state_dict' in ckpt else ckpt
+            self.craft_model.load_state_dict(state_dict)
+            self.craft_model.to(self.craft_device)
+            self.craft_model.eval()
+            print(f"CRAFT loaded on {self.craft_device}")
+
+        else:
+            raise ValueError(f"Unknown detector {detector!r}. Choose 'east' or 'craft'.")
+
+        #  Text recognizer 
+        if recognizer == 'mser':
+            self.mser = cv2.MSER_create()
+            self.model = OvO_SVM().load(_SVM_MODEL_DIR)
+            self.le = joblib.load(os.path.join(_SVM_MODEL_DIR, 'OvO_SVM_label_encoder.joblib'))
+
+        elif recognizer == 'easyocr':
+            import torch
+            import easyocr
+            gpu = torch.cuda.is_available()
+            self.easyocr_reader = easyocr.Reader(['en'], gpu=gpu)
+            print(f"EasyOCR loaded (gpu={gpu})")
+
+        else:
+            raise ValueError(f"Unknown recognizer {recognizer!r}. Choose 'mser' or 'easyocr'.")
+
         self._ocr_repo = OCRRepository()
 
-    def _recognize_word(self, word_img):
+    #  Detection helpers 
+
+    def _detect_words(self, frame):
+        if self.detector == 'east':
+            return extract_word_images(frame, self.net, pad=8)
+        else:
+            return extract_word_images_craft(frame, self.craft_model, self.craft_device)
+
+    #  Recognition helpers 
+
+    def _recognize_word_mser(self, word_img):
         gray = cv2.cvtColor(word_img, cv2.COLOR_BGR2GRAY)
         _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         if np.sum(binary == 0) > np.sum(binary == 255):
             binary = cv2.bitwise_not(binary)
 
         _, boxes = self.mser.detectRegions(binary)
-        unique_boxes = set(tuple(b) for b in boxes)
         unique_boxes = list({tuple(b) for b in boxes})
         unique_boxes = merge_boxes(unique_boxes, threshold=0.3)
         unique_boxes = sort_word_chars(unique_boxes)
@@ -69,11 +117,28 @@ class OCR:
             features = HoG(orientations, magnitudes)
             predicted_label, confidence = predict_char(features, self.model, self.le)
             text += self.le.inverse_transform(predicted_label)[0]
-            #char_confidences.append(float(confidence))
 
         word_text = text.strip().lower()
         word_confidence = float(np.mean(char_confidences)) if char_confidences else 0.0
         return word_text, word_confidence
+
+    def _recognize_word_easyocr(self, word_img):
+        results = self.easyocr_reader.readtext(word_img, detail=1)
+        if not results:
+            return '', 0.0
+        text = ' '.join(r[1] for r in results).strip().lower()
+        confidence = float(np.mean([r[2] for r in results]))
+        if confidence < 0.5:
+            return None, 0.0
+        return text, confidence
+
+    def _recognize_word(self, word_img):
+        if self.recognizer == 'mser':
+            return self._recognize_word_mser(word_img)
+        else:
+            return self._recognize_word_easyocr(word_img)
+
+    #  Main loop 
 
     def process_frames(self):
         for i, frame_data in enumerate(self.frames, 1):
@@ -89,14 +154,14 @@ class OCR:
                 continue
 
             if frame is not None:
-                print("Running OCR...")
-                word_images = extract_word_images(frame, self.net, pad=0)
+                print(f"Running OCR (detector={self.detector}, recognizer={self.recognizer})...")
+                word_images = self._detect_words(frame)
                 print(f"Detected {len(word_images)} word regions")
 
                 for word_img in word_images:
                     text, confidence = self._recognize_word(word_img)
 
-                    if not text or len(text.strip()) < 5:
+                    if not text or len(text.strip()) < 2:
                         continue
 
                     if text not in self.inverted_index:
@@ -104,7 +169,7 @@ class OCR:
 
                     if any(occ['scene'] == scene.index for occ in self.inverted_index[text]):
                         continue
-
+                    
                     self.inverted_index[text].append({
                         'scene': scene.index,
                         'frame': frame_number,
@@ -120,6 +185,8 @@ class OCR:
                         start_time=scene.start_time,
                         end_time=scene.end_time,
                         frame_number=frame_number,
+                        word_detection_model = self.detector,
+                        word_recognition_model = self.recognizer
                     )
 
             else:
