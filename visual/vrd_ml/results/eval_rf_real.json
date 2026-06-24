@@ -1,0 +1,8 @@
+{
+  "Recall@50": 58.33,
+  "Recall@100": 70.24,
+  "mRecall@50": 19.12,
+  "mRecall@100": 30.03,
+  "ZeroShot_Recall@50": 19.05,
+  "ZeroShot_Recall@100": 27.66
+}

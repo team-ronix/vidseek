@@ -43,6 +43,7 @@ class ObjectDetector:
         return results
 
     def detect_objects(self):
+        objects = []
         for i, frame_data in enumerate(self.frames, 1):
             frame_number = frame_data['frame_number']
             frame_time = frame_data['frame_time']
@@ -60,6 +61,7 @@ class ObjectDetector:
                 results = self._build_results(frame)
                 results.sort(key=lambda x: x[1], reverse=True)  # Sort results by score
                 results = results[:self.top_k]  # Keep only top_k results
+                objects.append(results)
                 for name, conf, box in results:
                         print(f"       - Detected '{name}' with confidence {conf:.2f}")
                         if name not in self.inverted_index:
@@ -78,7 +80,7 @@ class ObjectDetector:
                             'end_time': scene.end_time,
                             'confidence': float(conf)
                         })
-            
+        return objects
 
     def save_inverted_index(self, output_path='object_inverted_index.json'):
         with open(output_path, 'w', encoding='utf-8') as f:

@@ -130,3 +130,4 @@ Transformer/**/*.pkl
 eval_data/
 visual/**/*.pkl
 visual/**/*.npy
+visual/**/*.txt
