@@ -13,42 +13,14 @@ class HNSWIndex:
     """
     Hierarchical Navigable Small World (HNSW) index.
 
-    Atomic commit design
-    --------------------
-    All vectors and the graph live in RAM between saves.  A single
-    ``save()`` call writes every vector to ``vectors.dat`` via a temp-file
-    rename and then saves the graph to ``graph.npz``, also atomically.
-    On crash, no partial state is committed: the next load restores the
-    index exactly to the last ``save()`` checkpoint.
-
-    Typical usage
-    -------------
-    Batch insert (call save() periodically or at the end)::
-
-        idx = HNSWIndex("my_index", dimension=384)
-        for vec in vectors:
-            idx.insert(vec)
-        idx.save()
-
-    Or as a context manager (auto-saves on exit)::
-
-        with HNSWIndex("my_index", dimension=384) as idx:
-            for vec in vectors:
-                idx.insert(vec)
-
-    Query::
-
-        results = idx.query(query_vec, top_k=10)
-        # [(vector_id, cosine_similarity), ...]
-
     Parameters
     ----------
     M : int
-        Max neighbours per node at layers > 0.  Layer 0 uses 2*M.
+        Max neighbours per node at layers > 0.Layer 0 uses 2*M.
         Higher M -> better recall, more memory and slower inserts.
-        Typical values: 8-64.  Default: 16.
+        Typical values: 8-64.  Default: 20.
     ef_construction : int
-        Beam width during graph construction.  Higher -> better graph quality
+        Beam width during graph construction. Higher -> better graph quality
         and recall, slower inserts.  Must be >= M.  Default: 200.
     """
 
@@ -63,21 +35,19 @@ class HNSWIndex:
         self.root_dir.mkdir(parents=True, exist_ok=True)
 
         self.M  = M
-        self.M0 = 2 * M                    # degree cap at layer 0
+        self.M0 = 2 * M                   
         self.ef_construction = max(ef_construction, M)
-        self._mL = 1.0 / math.log(M)      # level-assignment scale factor
+        self._mL = 1.0 / math.log(M)
 
         self.vectors_path  = self.root_dir / "vectors.dat"
         self.graph_path    = self.root_dir / "graph.npz"
-        self.manifest_path = self.root_dir / "manifest.json"
+        self.metadata = self.root_dir / "manifest.json"
 
         self._lock  = threading.Lock()
         self._dirty = False
 
-        # In-RAM storage — all vectors live here between saves
         self._vec_buf: list[np.ndarray] = []
 
-        # In-RAM graph
         self._neighbors: list[list[set[int]]] = []
         self._levels:    list[int]             = []
         self._entry_point: int = -1
@@ -86,34 +56,33 @@ class HNSWIndex:
         self._load_or_bootstrap(dimension)
 
     def _load_or_bootstrap(self, dimension: int | None) -> None:
-        if self.manifest_path.exists():
-            self._manifest = json.loads(self.manifest_path.read_text())
+        if self.metadata.exists():
+            self._metadata = json.loads(self.metadata.read_text())
             given_dim = int(dimension) if dimension is not None else None
-            stored_dim = self._manifest["dimension"]
-            if given_dim is not None and self._manifest["vector_count"] > 0 and given_dim != stored_dim:
+            stored_dim = self._metadata["dimension"]
+            if given_dim is not None and self._metadata["vector_count"] > 0 and given_dim != stored_dim:
                 raise ValueError(
                     f"Dimension mismatch: index has {stored_dim}, caller passed {given_dim}"
                 )
             if self.graph_path.exists():
                 self._load_graph()
-            # Load saved vectors from disk into RAM
             n = len(self._levels)
             if n > 0 and self.vectors_path.exists():
                 raw = np.fromfile(str(self.vectors_path), dtype=np.float32)
-                mat = raw.reshape(n, self._manifest["dimension"])
+                mat = raw.reshape(n, self._metadata["dimension"])
                 self._vec_buf = [mat[i].copy() for i in range(n)]
-            # Keep manifest in sync with the graph (the true commit point)
-            self._manifest["vector_count"] = n
+            # Keep metadata in sync with the graph
+            self._metadata["vector_count"] = n
         else:
             dim = int(dimension) if dimension is not None else 384
-            self._manifest = {
+            self._metadata = {
                 "dimension":       dim,
                 "vector_count":    0,
                 "M":               self.M,
                 "M0":              self.M0,
                 "ef_construction": self.ef_construction,
             }
-            self._save_manifest()
+            self._save_metadata()
 
     def _load_graph(self) -> None:
         data = np.load(str(self.graph_path), allow_pickle=False)
@@ -140,19 +109,17 @@ class HNSWIndex:
     def save(self) -> None:
         """Atomically write all vectors and the graph to disk."""
         with self._lock:
-            # 1. Write all vectors atomically via temp-file rename
             if self._vec_buf:
                 arr = np.stack(self._vec_buf).astype(np.float32)
                 tmp_vec = self.root_dir / "vectors.tmp.dat"
                 arr.tofile(str(tmp_vec))
                 self._atomic_replace(tmp_vec, self.vectors_path)
 
-            # 2. Write graph atomically
             self._save_graph_locked()
 
-            # 3. Update manifest
-            self._manifest["vector_count"] = len(self._vec_buf)
-            self._save_manifest()
+            # 3. Update metadata
+            self._metadata["vector_count"] = len(self._vec_buf)
+            self._save_metadata()
             self._dirty = False
 
     def _save_graph_locked(self) -> None:
@@ -182,10 +149,10 @@ class HNSWIndex:
         np.savez_compressed(str(tmp), **data)  # type: ignore[arg-type]
         self._atomic_replace(tmp, self.graph_path)
 
-    def _save_manifest(self) -> None:
-        tmp = self.manifest_path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(self._manifest, ensure_ascii=True))
-        self._atomic_replace(tmp, self.manifest_path)
+    def _save_metadata(self) -> None:
+        tmp = self.metadata.with_suffix(".tmp")
+        tmp.write_text(json.dumps(self._metadata, ensure_ascii=True))
+        self._atomic_replace(tmp, self.metadata)
 
     def _atomic_replace(self, src: Path, dst: Path) -> None:
         for attempt in range(10):
@@ -205,7 +172,7 @@ class HNSWIndex:
 
     @property
     def dimension(self) -> int:
-        return int(self._manifest["dimension"])
+        return int(self._metadata["dimension"])
 
     @property
     def vector_count(self) -> int:
@@ -232,7 +199,7 @@ class HNSWIndex:
         visited = set(entry_points)
 
         # candidates: min-heap of (dist, id) — pop the closest first
-        # results:    max-heap of (-dist, id) — evict the furthest when full
+        # results : max-heap of (-dist, id) — pop the furthest when full
         candidates: list[tuple[float, int]] = []
         results:    list[tuple[float, int]] = []
 
@@ -266,11 +233,10 @@ class HNSWIndex:
         M: int,
     ) -> list[int]:
         """
-        HNSW heuristic neighbour selection (Malkov & Yashunin, Algorithm 4).
-
+        HNSW heuristic neighbour selection.
         A candidate is kept only if it is closer to the base node than to every
-        already-selected neighbour.  This drops redundant directional edges and
-        preserves long-range bridge links.  Pruned candidates back-fill remaining
+        already-selected neighbour.This drops redundant directional edges and
+        preserves long-range bridge links.Pruned candidates back-fill remaining
         slots so degree stays near M.
         """
         selected: list[tuple[float, int]] = []
@@ -300,10 +266,6 @@ class HNSWIndex:
     def insert(self, vector: np.ndarray) -> int:
         """
         Insert one vector.  Returns its assigned integer ID.
-
-        The vector is kept in RAM until ``save()`` is called, at which point
-        all vectors and the graph are written to disk atomically.  Either the
-        full insert is committed (vector + graph edges) or nothing is.
         """
         vec = np.asarray(vector, dtype=np.float32)
         if vec.ndim != 1:
@@ -315,7 +277,7 @@ class HNSWIndex:
                     f"Dimension mismatch: expected {self.dimension}, got {vec.shape[0]}"
                 )
             if not self._vec_buf:
-                self._manifest["dimension"] = int(vec.shape[0])
+                self._metadata["dimension"] = int(vec.shape[0])
 
             vec = self._normalize(vec)
             node_id = len(self._vec_buf)
@@ -378,16 +340,14 @@ class HNSWIndex:
     ) -> list[tuple[int, float]]:
         """
         Return the ``top_k`` approximate nearest neighbours.
-
         Parameters
         ----------
         ef : int or None
             Search beam width at layer 0.  Larger values improve recall at the
-            cost of latency.  Defaults to ``max(top_k, 50)``.
-
+            cost of latency.
         Returns
         -------
-        list of (vector_id, cosine_similarity) sorted best-first.
+        list of(vector_id, cosine_similarity) sorted by closest first
         """
         if top_k <= 0 or not self._vec_buf or self._entry_point == -1:
             return []
@@ -406,9 +366,9 @@ class HNSWIndex:
         ep  = [self._entry_point]
 
         for currLevel in range(self._max_layer, 0, -1):
-            results = self._search_layer(vec, ep, ef=1, layer=currLevel)
+            results = self._search_layer(vec, ep, ef=1,layer=currLevel)
             ep = [results[0][1]]
 
-        candidates = self._search_layer(vec, ep, ef=ef, layer=0)
+        candidates = self._search_layer(vec, ep, ef=ef,layer=0)
 
         return [(node_id, 1.0 - dist) for dist, node_id in candidates[:top_k]]
