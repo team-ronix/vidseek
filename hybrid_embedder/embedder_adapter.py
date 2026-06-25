@@ -75,12 +75,12 @@ class HybridEmbedderAdapter:
         dense_sim: float,
         q_sparse: np.ndarray,
         doc_text: str,
-        alpha: float = 0.5,
+        alpha: float = 0.9,
     ) -> float:
         """
         Combine HNSW dense cosine with BM25 sparse cosine.
 
-            score = alpha * dense_cosine + (1 - alpha) * sparse_cosine
+            score = (1 - alpha) * dense_cosine + alpha * sparse_cosine
         """
         _, doc_sparse = self.encode(doc_text)
         norm_q = np.linalg.norm(q_sparse)
@@ -89,7 +89,7 @@ class HybridEmbedderAdapter:
             sparse_sim = float(np.dot(q_sparse, doc_sparse) / (norm_q * norm_d))
         else:
             sparse_sim = 0.0
-        return alpha * dense_sim + (1.0 - alpha) * sparse_sim
+        return (1.0 - alpha) * dense_sim + alpha * sparse_sim
 
     # ------------------------------------------------------------------ batch indexing
     def transform(self) -> None:

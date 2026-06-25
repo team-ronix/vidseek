@@ -261,7 +261,7 @@ def search(q: str, top_k: int = 10, model: str = "transformer"):
             ).query(q_dense.tolist(), top_k=top_k)
             for meta, dense_sim in zip(metas[0], sims[0]):
                 doc_text = meta.get("text", "")
-                score = adapter.hybrid_score(dense_sim, q_sparse, doc_text)
+                score = adapter.hybrid_score(dense_sim, q_sparse, doc_text, alpha=0.9)
                 if score > 0.15:
                     results.append(SearchResult(
                         type=meta.get("type", "unknown"),
