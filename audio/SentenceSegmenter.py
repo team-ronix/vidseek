@@ -23,53 +23,6 @@ _MAX_LEN = 128
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
-def _clean_chunk(text: str) -> str:
-    text = re.sub(r"[^\x20-\x7E]+", " ", text)
-    text = re.sub(r"\s+", " ", text).strip()
-    if not text:
-        return text
-    parts = re.split(r"(?<=[.!?])\s+", text)
-    deduped: List[str] = []
-    prev = None
-    for part in parts:
-        stripped = part.strip()
-        if stripped and stripped != prev:
-            deduped.append(part)
-            prev = stripped
-    return " ".join(deduped).strip()
-
-
-def _load_chunks(transcript_json: str, fallback_video_path: str) -> List[Dict[str, Any]]:
-    with open(transcript_json, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    raw: List[Dict[str, Any]] = []
-    if isinstance(data, list):
-        raw = data
-    elif isinstance(data, dict):
-        for c in data.get("chunks", []):
-            ts = c.get("timestamp", [0.0, 0.0])
-            raw.append({
-                "text"      : c.get("text", ""),
-                "start"     : float(ts[0]) if ts[0] is not None else 0.0,
-                "end"       : float(ts[1]) if ts[1] is not None else 0.0,
-                "video_path": fallback_video_path,
-            })
-
-    chunks: List[Dict[str, Any]] = []
-    for item in raw:
-        cleaned = _clean_chunk(item.get("text", ""))
-        if not cleaned:
-            continue
-        chunks.append({
-            "text"      : cleaned,
-            "start"     : float(item.get("start", 0.0)),
-            "end"       : float(item.get("end", 0.0)),
-            "video_path": item.get("video_path", fallback_video_path),
-        })
-    return chunks
-
-
 def _smooth(signal: np.ndarray, sigma: float) -> np.ndarray:
     radius = max(1, int(3.0 * sigma))
     x = np.arange(-radius, radius + 1, dtype=np.float64)
@@ -131,8 +84,8 @@ def _tfidf_title(texts: List[str], n: int) -> str:
 class SentenceSegmentation:
     def __init__(
         self,
-        video_path: str,
-        transcript_json: str,
+        chunks: List[Dict[str, Any]],
+        video_path: str = "",
         *,
         window_size: int             = 4,
         smooth_sigma: float          = 2.0,
@@ -151,7 +104,7 @@ class SentenceSegmentation:
         self.n_title_keywords      = n_title_keywords
         self.batch_size            = batch_size
 
-        self.chunks: List[Dict[str, Any]] = _load_chunks(transcript_json, video_path)
+        self.chunks: List[Dict[str, Any]] = chunks
 
         with open(_MODEL_DIR / "vocab.pkl", "rb") as vf:
             self._vocab = pickle.load(vf)
