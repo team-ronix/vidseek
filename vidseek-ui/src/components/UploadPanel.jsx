@@ -5,7 +5,7 @@ import { useUpload } from '../hooks/useUpload';
 const ACCEPT = '.mp4,.avi,.mov,.mkv,.webm';
 
 const DETECTOR_OPTS   = [{ value: 'craft', label: 'CRAFT' }, { value: 'east', label: 'EAST' }];
-const RECOGNIZER_OPTS = [{ value: 'easyocr', label: 'EasyOCR' }, { value: 'mser', label: 'MSER' }];
+const RECOGNIZER_OPTS = [{ value: 'easyocr', label: 'EasyOCR' }, { value: 'mser', label: 'MSER + HOG' }];
 const OBJECT_DETECTOR_OPTS = [{ value: 'faster_rcnn', label: 'Faster R-CNN' }, { value: 'hog', label: 'HOG' }];
 
 export function UploadPanel() {
