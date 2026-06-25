@@ -184,8 +184,11 @@ class SceneSegmenter:
 
         return self.scenes_list
 
-    def _frames_in_scene(self, scene) -> list[int]:
-        return [f for f in self._video_cuts if scene.start_frame <= f <= scene.end_frame]
+    def _frames_in_scene(self, scene, last_scene = False) -> list[int]:
+        result = [f for f in self._video_cuts if scene.start_frame <= f < scene.end_frame]
+        if last_scene:
+            result.append(scene.end_frame)
+        return result
 
     def extract_frames(self):
         """
@@ -208,7 +211,7 @@ class SceneSegmenter:
 
         
         for scene in self.scenes_list:
-            frame_numbers = self._frames_in_scene(scene)
+            frame_numbers = self._frames_in_scene(scene, last_scene=(scene.index == len(self.scenes_list) - 1))
             for frame_num in frame_numbers:
                 cap.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
                 ret, frame = cap.read()
