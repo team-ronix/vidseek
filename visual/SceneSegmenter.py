@@ -46,17 +46,6 @@ def _bgr_to_hsv(img):
     cmax *= 255
     return np.stack([h.astype(np.uint8), s.astype(np.uint8), cmax.astype(np.uint8)], axis=-1)
 
-def _calc_hist(channel, n_bins, value_range):
-    return np.histogram(channel.ravel(),bins=n_bins,range=value_range)[0].astype(np.float32)
-
-
-def _prefix_sum(dist_mat):
-    N = len(dist_mat)
-    ps = np.zeros((N+1, N+1))
-    for i in range(1, N+1):
-        for j in range(1, N+1):
-            ps[i][j] = dist_mat[i-1][j-1]+ps[i-1][j]+ps[i][j-1]-ps[i-1][j-1]
-    return ps
 
 
 import os
@@ -143,12 +132,15 @@ def detectShots(video_path,
 
     cuts.append(fi)
 
-    cleaned_cuts = [cuts[0]]
+    cleaned_cuts = [0]
     for i in range(1, len(cuts)):
         start = cuts[i-1]
         end = cuts[i]
-        if (end - start) < min_len:
+        if (end - start) > min_len:
             cleaned_cuts.append(end)
+
+    if cleaned_cuts[-1] != fi:
+        cleaned_cuts.append(fi)
 
     return cleaned_cuts, fi, fps
 class SceneSegmenter:
@@ -191,12 +183,6 @@ class SceneSegmenter:
         return result
 
     def extract_frames(self):
-        """
-        Extract representative frames from each detected scene.
-
-        Returns a list of dicts with keys: scene_index, frame_number, frame,
-        scene, frame_count_in_scene.
-        """
         print(f"Extracting frames from {len(self.scenes_list)} scenes...")
         if not self.scenes_list:
             return []
@@ -211,7 +197,7 @@ class SceneSegmenter:
 
         
         for scene in self.scenes_list:
-            frame_numbers = self._frames_in_scene(scene, last_scene=(scene.index == len(self.scenes_list) - 1))
+            frame_numbers = [scene.start_frame]
             for frame_num in frame_numbers:
                 cap.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
                 ret, frame = cap.read()
