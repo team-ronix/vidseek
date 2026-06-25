@@ -211,14 +211,6 @@ def _run_pipeline(job_id: str, video_path: str, video_id: int,
 
 @app.get("/search/transcript", response_model=SearchResponse)
 def search(q: str, top_k: int = 10, model: str = "transformer"):
-    """
-    Semantic transcript search.
-
-    model: "transformer" | "hybrid" | "both"
-      - transformer  – custom Transformer encoder (384-dim HNSW)
-      - hybrid       – LSA dense + BM25 sparse encoder (64-dim HNSW)
-      - both         – run both and merge results (deduplicated by video_path+start_time)
-    """
     if not q.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty")
     if model not in ("transformer", "hybrid", "both"):
