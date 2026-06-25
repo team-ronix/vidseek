@@ -138,8 +138,8 @@ class TwoLevelIVFIndex:
         """
         Return (l1_threshold, l2_threshold).
         Uses constructor values when provided; otherwise falls back to adaptive schedule.
-        Adaptive: loosens as index grows → finer granularity at scale.
-          l1: 0.72 → ~0.52 floor  |  l2: 0.85 → ~0.68 floor
+        Adaptive: loosens as index grows -> finer granularity at scale.
+          l1: 0.72 -> ~0.52 floor  |  l2: 0.85 -> ~0.68 floor
         """
         if self._new_level1_threshold is not None and self._new_level2_threshold is not None:
             return self._new_level1_threshold, self._new_level2_threshold
@@ -166,10 +166,17 @@ class TwoLevelIVFIndex:
         return l1_probes, l2_probes
 
     def _normalize(self, x: np.ndarray) -> np.ndarray:
-        norm = np.linalg.norm(x)
-        if norm == 0:
-            return x.astype(np.float32)
-        return (x / norm).astype(np.float32)
+        if x.ndim == 1:
+            norm = np.linalg.norm(x)
+            if norm == 0:
+                return x.astype(np.float32)
+            return (x / norm).astype(np.float32)
+        else:
+            if x.size == 0:
+                return x.astype(np.float32)
+            norms = np.linalg.norm(x, axis=1, keepdims=True)
+            norms[norms == 0] = 1.0
+            return (x / norms).astype(np.float32)
 
     def _append_vector(self, vec: np.ndarray) -> int:
         vec_id = int(self._manifest["next_vector_id"])
@@ -225,7 +232,8 @@ class TwoLevelIVFIndex:
                 self._write_json(self.layout_path, layout)
                 return IVFInsertResult(vector_id=vec_id, level1_id=0, level2_id=0)
 
-            level1_scores = level1 @ vec
+            level1_norm = self._normalize(level1)
+            level1_scores = level1_norm @ vec
             best_level1 = int(np.argmax(level1_scores))
             best_level1_score = float(level1_scores[best_level1])
 
@@ -254,7 +262,8 @@ class TwoLevelIVFIndex:
                 chosen_level2 = new_level2_id
             else:
                 local_level2 = level2[np.asarray(level2_ids, dtype=np.int64)]
-                level2_scores = local_level2 @ vec
+                local_level2_norm = self._normalize(local_level2)
+                level2_scores = local_level2_norm @ vec
                 local_best = int(np.argmax(level2_scores))
                 best_level2_score = float(level2_scores[local_best])
                 chosen_level2 = int(level2_ids[local_best])
@@ -272,13 +281,13 @@ class TwoLevelIVFIndex:
 
             l1_count = int(layout["level1_counts"][best_level1])
             l1_old = level1[best_level1].copy()
-            l1_new = self._normalize((l1_old * l1_count + vec) / (l1_count + 1))
+            l1_new = (l1_old * l1_count + vec) / (l1_count + 1)
             level1[best_level1] = l1_new
             layout["level1_counts"][best_level1] = l1_count + 1
 
             l2_count = int(layout["level2_counts"][chosen_level2])
             l2_old = level2[chosen_level2].copy()
-            l2_new = self._normalize((l2_old * l2_count + vec) / (l2_count + 1))
+            l2_new = (l2_old * l2_count + vec) / (l2_count + 1)
             level2[chosen_level2] = l2_new
             layout["level2_counts"][chosen_level2] = l2_count + 1
 
@@ -318,8 +327,11 @@ class TwoLevelIVFIndex:
         if level1.shape[0] == 0:
             return []
 
+        level1_norm = self._normalize(level1)
+        level2_norm = self._normalize(level2)
+
         l1_probes, l2_probes = self._get_probes(level1.shape[0], layout)
-        level1_scores = level1 @ vec
+        level1_scores = level1_norm @ vec
         n_l1 = min(l1_probes, level1.shape[0])
         if n_l1 < level1.shape[0]:
             top_l1 = np.argpartition(level1_scores, -n_l1)[-n_l1:]
@@ -333,7 +345,7 @@ class TwoLevelIVFIndex:
             if not level2_ids:
                 continue
             l2_arr = np.asarray(level2_ids, dtype=np.int64)
-            l2_scores = level2[l2_arr] @ vec
+            l2_scores = level2_norm[l2_arr] @ vec
             n_l2 = min(l2_probes, len(level2_ids))
             if n_l2 < len(level2_ids):
                 top_l2_local = np.argpartition(l2_scores, -n_l2)[-n_l2:]
