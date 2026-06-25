@@ -21,6 +21,7 @@ import torch
 
 from Transformer import Transformer
 from Storage.HNSW import HNSWVectorStore
+from hybrid_embedder.embedder_adapter import HybridEmbedderAdapter
 from Storage.SQL.Repositories.VideoRepository import VideoRepository
 from Storage.SQL.Repositories.VRDRepository import VRDRepository
 from Storage.SQL.Repositories.ObjectRepository import ObjectRepository
@@ -183,6 +184,24 @@ def _run_pipeline(job_id: str, video_path: str, video_id: int,
         hnsw_store.commit()
         del transformer, hnsw_store; gc.collect()
 
+        update("Embedding (HybridEmbedder)...")
+        try:
+            hybrid_adapter = HybridEmbedderAdapter(asr_chunks)
+            if not hybrid_adapter.load():
+                raise RuntimeError("Pre-trained model not found at Hybrid_embedder/models/")
+            hybrid_adapter.transform()
+            hybrid_store = HNSWVectorStore(
+                source="hybrid",
+                index_root="./data/hnsw_hybrid_index",
+                dimension=hybrid_adapter.dimension,
+            )
+            hybrid_adapter.save_embeddings(hybrid_store)
+            hybrid_store.commit()
+            del hybrid_adapter, hybrid_store
+            gc.collect()
+        except Exception as e:
+            print(f"[HybridEmbedder] indexing error (non-fatal): {e}")
+
         update("Done", status="done")
 
     except Exception as e:
@@ -191,31 +210,71 @@ def _run_pipeline(job_id: str, video_path: str, video_id: int,
 
 
 @app.get("/search/transcript", response_model=SearchResponse)
-def search(q: str, top_k: int = 10):
+def search(q: str, top_k: int = 10, model: str = "transformer"):
+    """
+    Semantic transcript search.
+
+    model: "transformer" | "hybrid" | "both"
+      - transformer  – custom Transformer encoder (384-dim HNSW)
+      - hybrid       – LSA dense + BM25 sparse encoder (64-dim HNSW)
+      - both         – run both and merge results (deduplicated by video_path+start_time)
+    """
     if not q.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty")
+    if model not in ("transformer", "hybrid", "both"):
+        raise HTTPException(status_code=400, detail="model must be 'transformer', 'hybrid', or 'both'")
 
     results: list[SearchResult] = []
     latencies: dict[str, float] = {}
 
-    t0 = time.time()
-    try:
-        emb = Transformer([]).transform_single_text(q).tolist()
-        _, metas, sims = HNSWVectorStore(source="transformer").query(emb, top_k=top_k)
-        for meta, sim in zip(metas[0], sims[0]):
-            if sim > 0.3:
-                results.append(SearchResult(
-                    type=meta.get("type", "unknown"),
-                    text=meta.get("text", ""),
-                    video_path=meta.get("video_path", ""),
-                    start_time=float(meta.get("start_time", 0)),
-                    end_time=float(meta.get("end_time", 0)),
-                    sim=float(sim),
-                    source_model="transformer",
-                ))
-    except Exception as e:
-        print(f"Transformer search error: {e}")
-    latencies["transformer"] = round((time.time() - t0) * 1000, 1)
+    if model in ("transformer", "both"):
+        t0 = time.time()
+        try:
+            emb = Transformer([]).transform_single_text(q).tolist()
+            _, metas, sims = HNSWVectorStore(source="transformer").query(emb, top_k=top_k)
+            for meta, sim in zip(metas[0], sims[0]):
+                if sim > 0.3:
+                    results.append(SearchResult(
+                        type=meta.get("type", "unknown"),
+                        text=meta.get("text", ""),
+                        video_path=meta.get("video_path", ""),
+                        start_time=float(meta.get("start_time", 0)),
+                        end_time=float(meta.get("end_time", 0)),
+                        sim=float(sim),
+                        source_model="transformer",
+                    ))
+        except Exception as e:
+            print(f"Transformer search error: {e}")
+        latencies["transformer"] = round((time.time() - t0) * 1000, 1)
+
+    if model in ("hybrid", "both"):
+        t0 = time.time()
+        try:
+            adapter = HybridEmbedderAdapter()
+            if not adapter.load():
+                raise RuntimeError("Pre-trained model not found at Hybrid_embedder/models/")
+            q_dense, q_sparse = adapter.encode(q)
+            _, metas, sims = HNSWVectorStore(
+                source="hybrid",
+                index_root="./data/hnsw_hybrid_index",
+                dimension=adapter.dimension,
+            ).query(q_dense.tolist(), top_k=top_k)
+            for meta, dense_sim in zip(metas[0], sims[0]):
+                doc_text = meta.get("text", "")
+                score = adapter.hybrid_score(dense_sim, q_sparse, doc_text)
+                if score > 0.15:
+                    results.append(SearchResult(
+                        type=meta.get("type", "unknown"),
+                        text=doc_text,
+                        video_path=meta.get("video_path", ""),
+                        start_time=float(meta.get("start_time", 0)),
+                        end_time=float(meta.get("end_time", 0)),
+                        sim=round(score, 4),
+                        source_model="hybrid",
+                    ))
+        except Exception as e:
+            print(f"HybridEmbedder search error: {e}")
+        latencies["hybrid"] = round((time.time() - t0) * 1000, 1)
 
     results.sort(key=lambda r: r.sim, reverse=True)
     return SearchResponse(query=q, results=results,

@@ -1,14 +1,22 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 
 const SOURCES = [
   { id: 'transcript', label: 'Transcription' },
   { id: 'ocr',        label: 'On-screen Text' },
 ];
 
-export function SearchPanel({ onSourceChange }) {
+const MODELS = [
+  { id: 'transformer', label: 'Transformer' },
+  { id: 'hybrid',      label: 'HybridEmbedder' },
+  { id: 'both',        label: 'Both' },
+];
+
+export function SearchPanel({ onSourceChange, onModelChange }) {
   const [activeSource, setActiveSource] = useState('transcript');
+  const [activeModel,  setActiveModel]  = useState('transformer');
 
   const handleSource = (id) => { setActiveSource(id); onSourceChange(id); };
+  const handleModel  = (id) => { setActiveModel(id);  onModelChange?.(id); };
 
   return (
     <div className="search-panel-inline">
@@ -26,6 +34,23 @@ export function SearchPanel({ onSourceChange }) {
           ))}
         </div>
       </div>
+
+      {activeSource === 'transcript' && (
+        <div className="search-filter-row">
+          <span className="search-panel-label">Model</span>
+          <div className="source-pill-row">
+            {MODELS.map(m => (
+              <button
+                key={m.id}
+                className={`source-pill model-pill${activeModel === m.id ? ' active' : ''}`}
+                onClick={() => handleModel(m.id)}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

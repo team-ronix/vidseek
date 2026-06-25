@@ -72,5 +72,15 @@ class VectorMetadataRepository:
             out[int(row.vector_id)] = base_meta
         return out
 
+    def delete_by_model(self, embedder_model: str) -> int:
+        """Delete all vector_metadata rows for the given embedder. Returns deleted count."""
+        deleted = (
+            self.db.query(VectorMetadata)
+            .filter(VectorMetadata.embedder_model == embedder_model)
+            .delete(synchronize_session=False)
+        )
+        self.db.commit()
+        return deleted
+
     def close(self):
         self.db.close()

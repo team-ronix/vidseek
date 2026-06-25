@@ -18,6 +18,11 @@ export function ResultCard({ result, index }) {
         {/* Type badge */}
         <span className={`type-badge type-${result.type}`}>{result.type}</span>
 
+        {/* Model badge – only shown when comparing both models */}
+        {result.source_model && result.source_model !== 'transformer' && (
+          <span className={`model-badge model-${result.source_model}`}>{result.source_model}</span>
+        )}
+
         {/* Matched text / triple */}
         <p className="card-text">{result.text}</p>
 

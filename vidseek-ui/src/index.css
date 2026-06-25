@@ -513,6 +513,21 @@ select { font-family: inherit; }
 .type-badge.type-object     { background: var(--tag-object-bg);     color: var(--tag-object); }
 .type-badge.type-vrd        { background: var(--tag-vrd-bg);        color: var(--tag-vrd); }
 
+/* -- Model badges (result card) ------------------------------------- */
+.model-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 4px;
+  margin-left: 6px;
+  align-self: flex-start;
+}
+.model-badge.model-hybrid { background: rgba(217,119,6,.12); color: rgb(150,80,0); }
+
+
 /* â”€â”€ State panels â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .state-panel {
   text-align: center;
