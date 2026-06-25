@@ -27,14 +27,24 @@ def get_edit_distance(target, word):
     return edit_distance, confidence
 
 
-def find_closest_word(word_rows, target):
+def find_closest_word(word_rows, target, threshold=0.7, top_n=5):
+    print("TEST find_closest_word")
     closest_word = -1
     highest_confidence = -1.0
 
+    kept_words = []
+
     for i, word_row in enumerate(word_rows):
         edit_distance, confidence = get_edit_distance(target.lower(), word_row.word.lower())
-        if confidence > highest_confidence:
-            highest_confidence = confidence
-            closest_word = i
+        # if confidence > highest_confidence:
+        #     highest_confidence = confidence
+        #     closest_word = i
+        if confidence >= threshold:
+            kept_words.append((i, confidence))
 
-    return closest_word, highest_confidence
+    sorted_words = sorted(kept_words, key=lambda x: x[1], reverse=True)[:top_n]
+    if (len(sorted_words) == 0):
+        return -1
+    
+    return sorted_words
+    

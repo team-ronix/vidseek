@@ -31,15 +31,16 @@ class OCRRepository:
             self.db.commit()
 
     def find_closest_word_video(self, target: str, video_id = None):
+        print("test find_closest_word_video")
         words = None
         if video_id is None:
             words = self.db.query(OCRWord).all()
         else:
             words = self.db.query(OCRWord).filter(OCRWord.video_id == video_id).all()
-        closest_word_index, confidence = find_closest_word(words, target)
-        if closest_word_index == -1:
-            return None, 0.0
-        return words[closest_word_index], confidence
+        sorted_words = find_closest_word(words, target)
+        if sorted_words == -1:
+            return None
+        return [(words[i], confidence) for i, confidence in sorted_words]
     
     def find_closest_word_global(self, word: str):
         all_words = self.db.query(OCRWord).all()
