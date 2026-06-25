@@ -8,7 +8,6 @@ export function useSearch() {
   const [error,        setError]        = useState(null);
   const [query,        setQuery]        = useState('');
   const [sourceFilter, setSourceFilter] = useState('transcript');
-  const [model,        setModel]        = useState('transformer');
   const [latency,      setLatency]      = useState({});
   const debounceRef = useRef(null);
 
@@ -31,7 +30,7 @@ export function useSearch() {
           setRawVideos([]);
           setLatency({});
         } else {
-          const data = await searchVideos(query, 20, model);
+          const data = await searchVideos(query, 20);
           setRawResults(data.results || []);
           setRawVideos(data.videos  || []);
           setLatency(data.latency_ms || {});
@@ -47,11 +46,10 @@ export function useSearch() {
     }, 320);
 
     return () => clearTimeout(debounceRef.current);
-  }, [query, sourceFilter, model]);
+  }, [query, sourceFilter]);
 
-  const search      = useCallback(q   => setQuery(q),        []);
+  const search       = useCallback(q   => setQuery(q),         []);
   const changeSource = useCallback(src => setSourceFilter(src), []);
-  const changeModel  = useCallback(m   => setModel(m),         []);
 
   const videos = sourceFilter === 'ocr'
     ? (() => {
@@ -73,5 +71,5 @@ export function useSearch() {
       })()
     : rawVideos;
 
-  return { videos, loading, error, query, search, changeSource, model, changeModel, latency };
+  return { videos, loading, error, query, search, changeSource, latency };
 }
