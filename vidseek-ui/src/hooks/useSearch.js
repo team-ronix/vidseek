@@ -7,7 +7,7 @@ export function useSearch() {
   const [loading,      setLoading]      = useState(false);
   const [error,        setError]        = useState(null);
   const [query,        setQuery]        = useState('');
-  const [sourceFilter, setSourceFilter] = useState('all');
+  const [sourceFilter, setSourceFilter] = useState('transcript');
   const [model,        setModel]        = useState('transformer');
   const [latency,      setLatency]      = useState({});
   const debounceRef = useRef(null);
@@ -53,25 +53,25 @@ export function useSearch() {
   const changeSource = useCallback(src => setSourceFilter(src), []);
   const changeModel  = useCallback(m   => setModel(m),         []);
 
-  const videos = sourceFilter === 'all'
-    ? rawVideos
-    : (() => {
-        const filtered = rawResults.filter(r => r.type === sourceFilter);
+  const videos = sourceFilter === 'ocr'
+    ? (() => {
         const groups = {};
-        for (const r of filtered) {
-          if (!groups[r.video_path]) {
-            groups[r.video_path] = {
-              video_path: r.video_path,
-              video_name: r.video_path.split(/[\\/]/).pop(),
+        for (const r of rawResults) {
+          const key = r.video_path || '';
+          if (!groups[key]) {
+            groups[key] = {
+              video_path: key,
+              video_name: key.split(/[\\/]/).pop(),
               match_count: 0,
               results: [],
             };
           }
-          groups[r.video_path].match_count++;
-          groups[r.video_path].results.push(r);
+          groups[key].match_count++;
+          groups[key].results.push(r);
         }
         return Object.values(groups).sort((a, b) => b.match_count - a.match_count);
-      })();
+      })()
+    : rawVideos;
 
   return { videos, loading, error, query, search, changeSource, model, changeModel, latency };
 }

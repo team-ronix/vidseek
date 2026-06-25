@@ -20,7 +20,6 @@ import torch
 
 from Transformer import Transformer
 from HybridRetriever import HybridRetriever
-from Storage.CustomVectorStore import CustomVectorStore
 from Storage.HNSW import HNSWVectorStore
 from Storage.SQL.Repositories.VideoRepository import VideoRepository
 from Storage.SQL.Repositories.VRDRepository import VRDRepository
@@ -122,7 +121,6 @@ def _run_pipeline(job_id: str, video_path: str, video_id: int,
         update("OCR processing...")
         ocr = OCR(frames, video_path, video_id, detector=detector, recognizer=recognizer)
         ocr.process_frames()
-        ocr_index = ocr.get_inverted_index()
         del ocr
         gc.collect()
 
@@ -165,7 +163,7 @@ def _run_pipeline(job_id: str, video_path: str, video_id: int,
         del seg; gc.collect()
 
         update("Embedding (Transformer)...")
-        transformer = Transformer(ocr_index, transcript_segments)
+        transformer = Transformer(transcript_segments)
         transformer.transform()
         hnsw_store = HNSWVectorStore(source="transformer")
         transformer.save_embeddings(hnsw_store)
@@ -173,7 +171,7 @@ def _run_pipeline(job_id: str, video_path: str, video_id: int,
         del transformer, hnsw_store; gc.collect()
 
         update("Embedding (HybridEmbedder)...")
-        hybrid = HybridRetriever(ocr_index, transcript_segments)
+        hybrid = HybridRetriever(transcript_segments)
         hybrid.transform()
         hybrid_store = HNSWVectorStore(
             index_root="./data/hybrid_hnsw_index",
@@ -204,7 +202,7 @@ def search(q: str, top_k: int = 10, model: str = "transformer"):
     if model in ("transformer", "both"):
         t0 = time.time()
         try:
-            emb = Transformer({}, []).transform_single_text(q).tolist()
+            emb = Transformer([]).transform_single_text(q).tolist()
             _, metas, sims = HNSWVectorStore(source="transformer").query(emb, top_k=top_k)
             for meta, sim in zip(metas[0], sims[0]):
                 if sim > 0.3:
@@ -224,7 +222,7 @@ def search(q: str, top_k: int = 10, model: str = "transformer"):
     if model in ("hybrid", "both"):
         t0 = time.time()
         try:
-            hits = HybridRetriever({}, []).query_hybrid(q, top_k=top_k)
+            hits = HybridRetriever([]).query_hybrid(q, top_k=top_k)
             for hybrid_score, meta in hits:
                 if hybrid_score > 0.05:
                     results.append(SearchResult(

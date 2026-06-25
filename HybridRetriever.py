@@ -39,8 +39,7 @@ class HybridRetriever:
     Relies on pre-trained models in hybrid_embedder/models/.
     """
 
-    def __init__(self, ocr_results: dict, transcripts: list):
-        self.ocr_results = ocr_results
+    def __init__(self, transcripts: list):
         self.transcripts = transcripts
         self._embeddings: list = []
         self._metadata: list  = []
@@ -62,26 +61,12 @@ class HybridRetriever:
     # -- Indexing ------------------------------------------------------------
 
     def transform(self) -> None:
-        """Encode all OCR words and transcript segments; store dense+sparse."""
+        """Encode transcript segments only; store dense+sparse."""
         self._ensure_loaded()
 
-        for key, occurrences in self.ocr_results.items():
-            dense, bm25_vec = self._embedder.encode(key)
-            sparse = self._embedder.bm25.encode_as_dict(key)
-            for occ in occurrences:
-                self._embeddings.append(dense)
-                self._metadata.append({
-                    "type":          "ocr",
-                    "text":          key,
-                    "video_path":    occ["video_path"],
-                    "start_time":    occ["start_time"],
-                    "end_time":      occ["end_time"],
-                    "sparse_vector": sparse,
-                })
-
         for item in self.transcripts:
-            dense, _ = self._embedder.encode(item["text"])
-            sparse   = self._embedder.bm25.encode_as_dict(item["text"])
+            dense, _  = self._embedder.encode(item["text"])
+            sparse    = self._embedder.bm25.encode_as_dict(item["text"])
             self._embeddings.append(dense)
             self._metadata.append({
                 "type":          "transcript",

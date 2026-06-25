@@ -28,16 +28,6 @@ def test_transformer():
     print("TEST 1 — Transformer (Transformer.py)")
     print("=" * 60)
 
-    ocr_results = {
-        "Hello World": [
-            {"video_path": "video1.mp4", "start_time": 0.0, "end_time": 2.5}
-        ],
-        "Machine Learning": [
-            {"video_path": "video1.mp4", "start_time": 5.0, "end_time": 8.0},
-            {"video_path": "video2.mp4", "start_time": 1.0, "end_time": 3.0},
-        ],
-    }
-
     transcripts = [
         {"text": t, "video_path": "video1.mp4", "start": i * 10.0, "end": i * 10.0 + 9.0}
         for i, t in enumerate(SAMPLE_TEXTS)
@@ -46,7 +36,7 @@ def test_transformer():
     from Transformer import Transformer
 
     print("[1/3] Loading model …")
-    t = Transformer(ocr_results, transcripts)
+    t = Transformer(transcripts)
     print("      Model loaded OK")
 
     print("[2/3] Running transform() …")
@@ -54,7 +44,7 @@ def test_transformer():
     embeddings = t.get_embeddings()
     metadata   = t.get_metadata()
     assert len(embeddings) == len(metadata), "embedding / metadata length mismatch"
-    expected = sum(len(v) for v in ocr_results.values()) + len(transcripts)
+    expected = len(transcripts)
     assert len(embeddings) == expected, f"expected {expected} embeddings, got {len(embeddings)}"
     print(f"      transform() OK — {len(embeddings)} embeddings, shape {embeddings[0].shape}")
 

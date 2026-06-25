@@ -140,8 +140,8 @@ def run(args):
     gc.collect()
 
 
-    print("\nEmbedding OCR and transcript results...")
-    transformer = Transformer(ocr_inverted_index, transcript_segments)
+    print("\nEmbedding transcript results...")
+    transformer = Transformer(transcript_segments)
     transformer.transform()
     hnsw_store = HNSWVectorStore()
     transformer.save_embeddings(hnsw_store)

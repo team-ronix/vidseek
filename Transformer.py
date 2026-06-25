@@ -19,8 +19,7 @@ _MAX_LEN = 128
 
 
 class Transformer:
-    def __init__(self, ocr_results, transcripts):
-        self.ocr_results = ocr_results
+    def __init__(self, transcripts):
         self.transcripts = transcripts
         self.embeddings = []
         self.metadata = []
@@ -50,17 +49,6 @@ class Transformer:
         return emb[0]  # (d_model,)
 
     def transform(self):
-        for key, occurrences in self.ocr_results.items():
-            embedding = self._encode(key)
-            for occ in occurrences:
-                self.embeddings.append(embedding)
-                self.metadata.append({
-                    'type': 'ocr',
-                    'text': key,
-                    'video_path': occ['video_path'],
-                    'start_time': occ['start_time'],
-                    'end_time': occ['end_time']
-                })
         for item in self.transcripts:
             self.embeddings.append(self._encode(item['text']))
             self.metadata.append({

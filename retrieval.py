@@ -3,7 +3,7 @@ from Storage.CustomVectorStore import CustomVectorStore
 
 query = "March"
 
-transformer = Transformer({}, [])
+transformer = Transformer([])
 embedding = transformer.transform_single_text(query)
 print(f"searching query '{query}'")
 
