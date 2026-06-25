@@ -25,6 +25,14 @@ class ObjectDetector:
         if not os.path.exists(_HOG_MODEL_PATH):
             raise ValueError("Model file does not exist")
         self.detector.load(_HOG_MODEL_PATH)
+        self.voc_to_vrd = {
+            "aeroplane": "airplane",
+            "bicycle": "bike",
+            "motorbike": "motorcycle",
+            "tvmonitor": "monitor",
+            "diningtable": "table",
+            "pottedplant": "plant",
+        }
         
     
     def _build_results(self, frame):
@@ -38,6 +46,8 @@ class ObjectDetector:
         results = []
         for box, score, label in zip(pred_boxes, pred_scores, pred_labels):
             cls_name = label
+            if cls_name in self.voc_to_vrd:
+                cls_name = self.voc_to_vrd[cls_name]
             x1, y1, x2, y2 = box
             results.append((cls_name, score, (x1, y1, x2, y2)))
         return results

@@ -21,6 +21,14 @@ class ObjectDetector:
             raise ValueError("Model file does not exist")
         self.model.load_state_dict(torch.load(_FASTER_RCNN_MODEL_PATH, map_location=self.device))
         self.model.eval()
+        self.voc_to_vrd = {
+            "aeroplane": "airplane",
+            "bicycle": "bike",
+            "motorbike": "motorcycle",
+            "tvmonitor": "monitor",
+            "diningtable": "table",
+            "pottedplant": "plant",
+        }
         
     def _process_img(self, img, target_size=600, max_size=1000):
         pixel_mean = np.array([0.485, 0.456, 0.406], np.float32)
@@ -47,6 +55,8 @@ class ObjectDetector:
         results = []
         for box, score, label in zip(pred_boxes, pred_scores, pred_labels):
             cls_name = VOC_CLASSES[label.item() - 1]
+            if cls_name in self.voc_to_vrd:
+                cls_name = self.voc_to_vrd[cls_name]
             x1, y1, x2, y2 = (v / scale for v in box.tolist())
             results.append((cls_name, score, (x1, y1, x2, y2)))
         return results
