@@ -1,7 +1,6 @@
 ﻿import { useState } from 'react';
 
 const SOURCES = [
-  { id: 'all',        label: 'All Sources' },
   { id: 'transcript', label: 'Transcription' },
   { id: 'ocr',        label: 'On-screen Text' },
 ];
@@ -13,7 +12,7 @@ const MODELS = [
 ];
 
 export function SearchPanel({ onSourceChange, onModelChange }) {
-  const [activeSource, setActiveSource] = useState('all');
+  const [activeSource, setActiveSource] = useState('transcript');
   const [activeModel,  setActiveModel]  = useState('transformer');
 
   const handleSource = (id) => { setActiveSource(id); onSourceChange(id); };

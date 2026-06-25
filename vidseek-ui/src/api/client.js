@@ -12,7 +12,7 @@ async function request(url) {
 
 // â”€â”€ Text search (ChromaDB: OCR + transcript) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export async function searchVideos(query, topK = 20) {
-  return request(`/search?q=${encodeURIComponent(query)}&top_k=${topK}`);
+  return request(`/search/transcript?q=${encodeURIComponent(query)}&top_k=${topK}`);
 }
 
 export async function searchByOCR(query) {

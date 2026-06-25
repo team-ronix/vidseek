@@ -134,7 +134,8 @@ def _run_pipeline(job_id: str, video_path: str, video_id: int,
             obj_det = HOGObjectDetector(video_path, frames)
         objects = obj_det.detect_objects()
         ObjectRepository().save_from_inverted_index(obj_det.get_inverted_index(), video_id)
-        del obj_det; gc.collect()
+        del obj_det
+        gc.collect()
 
         update("Visual relationship detection...")
         vrd = VRD(frames=frames, video_path=video_path, objects=objects)
@@ -190,9 +191,7 @@ def _run_pipeline(job_id: str, video_path: str, video_id: int,
         raise
 
 
-# -- Search ------------------------------------------------------------------
-
-@app.get("/search", response_model=SearchResponse)
+@app.get("/search/transcript", response_model=SearchResponse)
 def search(q: str, top_k: int = 10, model: str = "transformer"):
     if not q.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty")
@@ -246,7 +245,6 @@ def search(q: str, top_k: int = 10, model: str = "transformer"):
                           videos=_group_by_video(results), latency_ms=latencies)
 
 
-# -- Upload ------------------------------------------------------------------
 
 @app.post("/videos/upload")
 async def upload_video(
