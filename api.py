@@ -1,4 +1,5 @@
 ﻿import gc
+import json
 import os
 import sys
 import time
@@ -19,7 +20,6 @@ sys.modules["ovo_svm"] = ovo_svm
 import torch
 
 from Transformer import Transformer
-from HybridRetriever import HybridRetriever
 from Storage.HNSW import HNSWVectorStore
 from Storage.SQL.Repositories.VideoRepository import VideoRepository
 from Storage.SQL.Repositories.VRDRepository import VRDRepository
@@ -154,8 +154,21 @@ def _run_pipeline(job_id: str, video_path: str, video_id: int,
             torch.cuda.empty_cache()
         gc.collect()
 
+        with open(transcription_path, "r", encoding="utf-8") as f:
+            _transcription = json.load(f)
+        asr_chunks = [
+            {
+                "text": c["text"].strip(),
+                "start": c["timestamp"][0] if c["timestamp"][0] is not None else 0.0,
+                "end": c["timestamp"][1] if c["timestamp"][1] is not None else 0.0,
+                "video_path": video_path,
+            }
+            for c in _transcription.get("chunks", [])
+            if c.get("text", "").strip()
+        ]
+
         update("Sentence segmentation...")
-        seg = SentenceSegmentation(video_path=video_path, transcript_json=transcription_path)
+        seg = SentenceSegmentation(asr_chunks, video_path)
         transcript_segments = seg.segment()
         transcript_repo = TranscriptRepository()
         transcript_repo.save_segments(transcript_segments, video_id)
@@ -163,24 +176,12 @@ def _run_pipeline(job_id: str, video_path: str, video_id: int,
         del seg; gc.collect()
 
         update("Embedding (Transformer)...")
-        transformer = Transformer(transcript_segments)
+        transformer = Transformer(asr_chunks)
         transformer.transform()
         hnsw_store = HNSWVectorStore(source="transformer")
         transformer.save_embeddings(hnsw_store)
         hnsw_store.commit()
         del transformer, hnsw_store; gc.collect()
-
-        update("Embedding (HybridEmbedder)...")
-        hybrid = HybridRetriever(transcript_segments)
-        hybrid.transform()
-        hybrid_store = HNSWVectorStore(
-            index_root="./data/hybrid_hnsw_index",
-            dimension=128,
-            source="hybrid",
-        )
-        hybrid.save_embeddings(hybrid_store)
-        hybrid_store.commit()
-        del hybrid, hybrid_store; gc.collect()
 
         update("Done", status="done")
 
@@ -190,53 +191,31 @@ def _run_pipeline(job_id: str, video_path: str, video_id: int,
 
 
 @app.get("/search/transcript", response_model=SearchResponse)
-def search(q: str, top_k: int = 10, model: str = "transformer"):
+def search(q: str, top_k: int = 10):
     if not q.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty")
-    if model not in ("transformer", "hybrid", "both"):
-        raise HTTPException(status_code=400, detail="model must be transformer | hybrid | both")
 
     results: list[SearchResult] = []
     latencies: dict[str, float] = {}
 
-    if model in ("transformer", "both"):
-        t0 = time.time()
-        try:
-            emb = Transformer([]).transform_single_text(q).tolist()
-            _, metas, sims = HNSWVectorStore(source="transformer").query(emb, top_k=top_k)
-            for meta, sim in zip(metas[0], sims[0]):
-                if sim > 0.3:
-                    results.append(SearchResult(
-                        type=meta.get("type", "unknown"),
-                        text=meta.get("text", ""),
-                        video_path=meta.get("video_path", ""),
-                        start_time=float(meta.get("start_time", 0)),
-                        end_time=float(meta.get("end_time", 0)),
-                        sim=float(sim),
-                        source_model="transformer",
-                    ))
-        except Exception as e:
-            print(f"Transformer search error: {e}")
-        latencies["transformer"] = round((time.time() - t0) * 1000, 1)
-
-    if model in ("hybrid", "both"):
-        t0 = time.time()
-        try:
-            hits = HybridRetriever([]).query_hybrid(q, top_k=top_k)
-            for hybrid_score, meta in hits:
-                if hybrid_score > 0.05:
-                    results.append(SearchResult(
-                        type=meta.get("type", "unknown"),
-                        text=meta.get("text", ""),
-                        video_path=meta.get("video_path", ""),
-                        start_time=float(meta.get("start_time", 0)),
-                        end_time=float(meta.get("end_time", 0)),
-                        sim=round(hybrid_score, 4),
-                        source_model="hybrid",
-                    ))
-        except Exception as e:
-            print(f"Hybrid search error: {e}")
-        latencies["hybrid"] = round((time.time() - t0) * 1000, 1)
+    t0 = time.time()
+    try:
+        emb = Transformer([]).transform_single_text(q).tolist()
+        _, metas, sims = HNSWVectorStore(source="transformer").query(emb, top_k=top_k)
+        for meta, sim in zip(metas[0], sims[0]):
+            if sim > 0.3:
+                results.append(SearchResult(
+                    type=meta.get("type", "unknown"),
+                    text=meta.get("text", ""),
+                    video_path=meta.get("video_path", ""),
+                    start_time=float(meta.get("start_time", 0)),
+                    end_time=float(meta.get("end_time", 0)),
+                    sim=float(sim),
+                    source_model="transformer",
+                ))
+    except Exception as e:
+        print(f"Transformer search error: {e}")
+    latencies["transformer"] = round((time.time() - t0) * 1000, 1)
 
     results.sort(key=lambda r: r.sim, reverse=True)
     return SearchResponse(query=q, results=results,
