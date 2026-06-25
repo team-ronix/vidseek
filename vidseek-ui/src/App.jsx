@@ -9,7 +9,7 @@ import { UploadPanel }       from './components/UploadPanel';
 import { useSearch }         from './hooks/useSearch';
 
 export default function App() {
-  const { videos, loading, error, query, search, changeSource, latency } = useSearch();
+  const { videos, loading, error, query, search, changeSource, changeModel, latency } = useSearch();
 
   const [uploadOpen,  setUploadOpen]  = useState(false);
   const [activeMode,  setActiveMode]  = useState(null);    // 'text' | 'object' | 'vrd'
@@ -62,7 +62,7 @@ export default function App() {
             onSearch={handleTextSearch}
             loading={loading && activeMode === 'text'}
           />
-          <SearchPanel onSourceChange={changeSource} />
+          <SearchPanel onSourceChange={changeSource} onModelChange={changeModel} />
         </div>
       </div>
 

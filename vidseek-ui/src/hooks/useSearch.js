@@ -1,4 +1,4 @@
-﻿import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { searchVideos, searchByOCR } from '../api/client';
 
 export function useSearch() {
@@ -8,6 +8,7 @@ export function useSearch() {
   const [error,        setError]        = useState(null);
   const [query,        setQuery]        = useState('');
   const [sourceFilter, setSourceFilter] = useState('transcript');
+  const [modelFilter,  setModelFilter]  = useState('transformer');
   const [latency,      setLatency]      = useState({});
   const debounceRef = useRef(null);
 
@@ -30,7 +31,7 @@ export function useSearch() {
           setRawVideos([]);
           setLatency({});
         } else {
-          const data = await searchVideos(query, 20);
+          const data = await searchVideos(query, 20, modelFilter);
           setRawResults(data.results || []);
           setRawVideos(data.videos  || []);
           setLatency(data.latency_ms || {});
@@ -46,10 +47,11 @@ export function useSearch() {
     }, 320);
 
     return () => clearTimeout(debounceRef.current);
-  }, [query, sourceFilter]);
+  }, [query, sourceFilter, modelFilter]);
 
-  const search       = useCallback(q   => setQuery(q),         []);
-  const changeSource = useCallback(src => setSourceFilter(src), []);
+  const search       = useCallback(q     => setQuery(q),          []);
+  const changeSource = useCallback(src   => setSourceFilter(src), []);
+  const changeModel  = useCallback(model => setModelFilter(model), []);
 
   const videos = sourceFilter === 'ocr'
     ? (() => {
@@ -71,5 +73,5 @@ export function useSearch() {
       })()
     : rawVideos;
 
-  return { videos, loading, error, query, search, changeSource, latency };
+  return { videos, loading, error, query, search, changeSource, changeModel, modelFilter, latency };
 }

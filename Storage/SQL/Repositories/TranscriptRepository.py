@@ -26,5 +26,25 @@ class TranscriptRepository:
             .all()
         )
 
+    def get_all_segments_with_video(self) -> List[Dict[str, Any]]:
+        """Return all transcript segments as dicts for HybridEmbedder corpus fitting."""
+        from Storage.SQL.Models.Video import Video as VideoModel
+        rows = (
+            self.db.query(TranscriptSegment, VideoModel)
+            .join(VideoModel, TranscriptSegment.video_id == VideoModel.id)
+            .order_by(TranscriptSegment.id)
+            .all()
+        )
+        return [
+            {
+                "text":       seg.text,
+                "video_path": video.file_path,
+                "start":      seg.start,
+                "end":        seg.end,
+            }
+            for seg, video in rows
+            if seg.text and seg.text.strip()
+        ]
+
     def close(self):
         self.db.close()

@@ -11,8 +11,8 @@ async function request(url) {
 }
 
 // â”€â”€ Text search (ChromaDB: OCR + transcript) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-export async function searchVideos(query, topK = 20) {
-  return request(`/search/transcript?q=${encodeURIComponent(query)}&top_k=${topK}`);
+export async function searchVideos(query, topK = 20, model = 'transformer') {
+  return request(`/search/transcript?q=${encodeURIComponent(query)}&top_k=${topK}&model=${model}`);
 }
 
 export async function searchByOCR(query) {
