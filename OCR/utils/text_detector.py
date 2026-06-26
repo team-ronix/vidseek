@@ -62,7 +62,7 @@ def decode(scores, geometry, scoreThresh):
 
 
 
-def extract_word_images(image, net, pad=20, min_area_ratio=0.001,
+def extract_word_images(image, net, pad=4, min_area_ratio=0.001,
                         inp_size=320, conf_thresh=0.5, nms_thresh=0.4, score_thresh=0.8):
     H, W = image.shape[:2]
 

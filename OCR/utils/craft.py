@@ -205,7 +205,6 @@ def extract_word_images_craft(frame, model, device, img_size=768,
 
     boxes = get_word_boxes(region, affinity, region_thresh, affinity_thresh, pad)
 
-    # heatmap is at half resolution of resized image; scale coords to original frame
     hm_h, hm_w = region.shape
     sx = W / hm_w
     sy = H / hm_h
