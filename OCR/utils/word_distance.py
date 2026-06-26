@@ -28,7 +28,6 @@ def get_edit_distance(target, word):
 
 
 def find_closest_word(word_rows, target, threshold=0.6, top_n=5):
-    print("TEST find_closest_word")
     closest_word = -1
     highest_confidence = -1.0
 
