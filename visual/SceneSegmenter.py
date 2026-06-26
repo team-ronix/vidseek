@@ -165,7 +165,7 @@ class SceneSegmenter:
         for i in range(1, len(cuts)):
             start_f = cuts[i-1]
             end_f = cuts[i]
-            cuts[i] += 
+            cuts[i] +=1
             self.scenes_list.append(Scene(
                 index=i,
                 start_time=start_f / fps,
