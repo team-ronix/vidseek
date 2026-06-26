@@ -34,22 +34,20 @@ Scene Segmentation  ──►  Keyframes
 
 Install these system tools before anything else.
 
-| Tool | Version | Purpose |
-|------|---------|---------|
-| Python | 3.12 – 3.14 | Backend runtime |
-| [Poetry](https://python-poetry.org/docs/#installation) | ≥ 2.0 | Python dependency manager |
-| Node.js + npm | ≥ 18 | Frontend |
-| [FFmpeg](https://ffmpeg.org/download.html) | any recent | Audio extraction for ASR |
-| PostgreSQL | ≥ 14 | Structured data storage |
-| CUDA (optional) | ≥ 11.8 | GPU acceleration for models |
+| Tool                                                   | Version     | Purpose                     |
+| ------------------------------------------------------ | ----------- | --------------------------- |
+| Python                                                 | 3.12 – 3.14 | Backend runtime             |
+| [Poetry](https://python-poetry.org/docs/#installation) | ≥ 2.0       | Python dependency manager   |
+| Node.js + npm                                          | ≥ 18        | Frontend                    |
+| [FFmpeg](https://ffmpeg.org/download.html)             | any recent  | Audio extraction for ASR    |
+| PostgreSQL                                             | ≥ 14        | Structured data storage     |
+| CUDA (optional)                                        | ≥ 11.8      | GPU acceleration for models |
 
 > **Windows users:** Install FFmpeg and make sure `ffmpeg` is on your `PATH`. The easiest way is `winget install ffmpeg` or via [gyan.dev builds](https://www.gyan.dev/ffmpeg/builds/).
 
 ---
 
 ## Installation
-
-
 
 ### 1. Install Python dependencies
 
@@ -149,31 +147,23 @@ The BM25+LSA hybrid embedder saves its fitted model under `hybrid_embedder/model
 
 ### External model files (download required)
 
-These are publicly available model weights that must be downloaded separately.
-
-#### EAST text detection model (optional)
-
-Only needed if using `--detector east` (default is `craft`, which requires no extra download):
-
-```bash
-wget https://github.com/oyyd/frozen_east_text_detection.pb/raw/master/frozen_east_text_detection.pb
-```
-
-Place in the project root.
-
 #### Whisper (auto-downloaded)
 
-The ASR module uses `openai/whisper-small` via HuggingFace Transformers. It is downloaded automatically on first run (~500 MB) and cached in your HuggingFace cache directory. No manual download needed.
+- The ASR module uses `openai/whisper-small` via HuggingFace Transformers. It is downloaded automatically on first run (~500 MB) and cached in your HuggingFace cache directory. No manual download needed.
 
-#### EasyOCR models (auto-downloaded)
+#### OCR models
 
-EasyOCR downloads its detection and recognition models on first use (~200 MB). No manual action needed.
+- EasyOCR downloads its detection and recognition models on first use (~200 MB). No manual action needed.
+- All generated models from the notebooks can be found in this drive (https://drive.google.com/drive/folders/1GAu6hPLEjHTu5US-5kLkhyDcQSWjvKD6?usp=sharing)
+- CRAFT model was trained on SynthText dataset on kaggle
+- HoG model was trained locally on Char74K dataset
 
 ---
 
 ## Pipeline Phases
 
 The pipeline stages run in order:
+
 1. Scene segmentation and keyframe extraction
 2. OCR on each keyframe
 3. Object detection (Faster R-CNN by default)
@@ -182,8 +172,6 @@ The pipeline stages run in order:
 6. Sentence segmentation
 7. Embedding via custom Transformer → HNSW index
 8. Embedding via Hybrid Embedder → HNSW index
-
-Intermediate JSON outputs are saved to `json_outputs/`. The HNSW vector indices are written to `data/`.
 
 ---
 
@@ -201,20 +189,21 @@ make server API_HOST=0.0.0.0 API_PORT=8080
 
 ### API endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/videos/upload` | Upload a video and start the ingestion pipeline |
-| `GET` | `/jobs/{job_id}` | Poll pipeline job status |
-| `GET` | `/search/transcript?q=...&model=transformer` | Semantic transcript search |
-| `GET` | `/search/ocr?q=...` | Text found on screen (OCR) search |
-| `GET` | `/search/object?key=...` | Search by detected object label |
-| `GET` | `/search/vrd?subject=...&relation=...&object=...` | Visual relationship search |
-| `GET` | `/videos/chapters?path=...` | Get chapter/segment list for a video |
-| `GET` | `/video/stream?path=...` | Stream a video file |
-| `GET` | `/objects` | List all indexed object labels |
-| `GET` | `/vrd/options` | List all VRD subjects, relations, objects |
+| Method | Path                                              | Description                                     |
+| ------ | ------------------------------------------------- | ----------------------------------------------- |
+| `POST` | `/videos/upload`                                  | Upload a video and start the ingestion pipeline |
+| `GET`  | `/jobs/{job_id}`                                  | Poll pipeline job status                        |
+| `GET`  | `/search/transcript?q=...&model=transformer`      | Semantic transcript search                      |
+| `GET`  | `/search/ocr?q=...`                               | Text found on screen (OCR) search               |
+| `GET`  | `/search/object?key=...`                          | Search by detected object label                 |
+| `GET`  | `/search/vrd?subject=...&relation=...&object=...` | Visual relationship search                      |
+| `GET`  | `/videos/chapters?path=...`                       | Get chapter/segment list for a video            |
+| `GET`  | `/video/stream?path=...`                          | Stream a video file                             |
+| `GET`  | `/objects`                                        | List all indexed object labels                  |
+| `GET`  | `/vrd/options`                                    | List all VRD subjects, relations, objects       |
 
 The upload endpoint accepts additional form fields:
+
 - `detector`: `craft` (default) or `east`
 - `recognizer`: `easyocr` (default) or `mser`
 - `object_detector`: `faster_rcnn` (default) or `hog`
@@ -264,7 +253,3 @@ make ui-start
 ```
 
 ---
-
-## Notes
-
-- **Vector indices:** The HNSW indices in `data/` grow with each video processed. They are not included in the repository and are created automatically by the pipeline.
