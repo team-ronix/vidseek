@@ -72,7 +72,7 @@ run:
 		--transcription-output-path "$(TRANSCRIPTION_OUTPUT_PATH)" \
 		--segmented-transcript-path "$(SEGMENTED_TRANSCRIPT_PATH)"
 
-serve:
+server:
 	$(UVICORN) api:app --host $(API_HOST) --port $(API_PORT) $(if $(filter true yes 1 on,$(API_RELOAD)),--reload,)
 
 create_db:
@@ -85,12 +85,12 @@ apply_migrate:
 	$(ALEMBIC) upgrade head
 
 ui-install:
-	cd /d "$(UI_DIR)" && npm install
+	cd "$(UI_DIR)" && npm install
 
 ui-start:
-	cd /d "$(UI_DIR)" && npm start
+	cd "$(UI_DIR)" && npm start
 
 ui-build:
-	cd /d "$(UI_DIR)" && npm run build
+	cd "$(UI_DIR)" && npm run build
 
 all: install run
