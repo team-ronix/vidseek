@@ -250,67 +250,21 @@ cp .env.example .env   # then edit .env with your DB URL and API tokens
 # 3. Set up database
 make apply_migrate
 
-# 4. Download YOLO weights (see Large Files section above)
-
-# 5. Train the Transformer (or skip if you have best_model.pt)
+# 4. Train the Transformer (or skip if you have best_model.pt)
 cd Transformer && poetry run python train.py && cd ..
 
-# 6. Ingest a video
+# 5. Ingest a video
 make run VIDEO_FILE=my_video.mp4
 
-# 7. Start the API
+# 6. Start the API
 make server
 
-# 8. Start the frontend (new terminal)
+# 7. Start the frontend (new terminal)
 make ui-start
-```
-
----
-
-## Project Structure
-
-```
-vidseek/
-├── main.py                     # CLI pipeline entrypoint
-├── api.py                      # FastAPI server
-├── Transformer.py              # Embedding wrapper (wraps the custom model)
-├── datastructures.py           # Shared data types
-│
-├── Transformer/                # Custom 384-dim text embedding model
-│   ├── train.py                # 3-phase training script
-│   ├── models/                 # Transformer architecture (encoder, attention, FFN)
-│   ├── losses/                 # MNR, triplet, cosine, contrastive losses
-│   └── reuslt_AllNLI+specter/  # Trained weights (best_model.pt, vocab.pkl) — not in repo
-│
-├── audio/
-│   ├── ASR.py                  # Whisper speech-to-text
-│   └── SentenceSegmenter.py    # Groups ASR chunks into semantic segments
-│
-├── visual/
-│   ├── SceneSegmenter.py       # Shot/scene boundary detection
-│   ├── faster_rcnn/            # Faster R-CNN object detector
-│   ├── hog/                    # HOG+SVM object detector (lightweight alternative)
-│   └── vrd_ml/                 # Visual Relationship Detection
-│
-├── OCR/
-│   └── src/OCR.py              # CRAFT detection + EasyOCR/CRNN recognition
-│
-├── hybrid_embedder/            # BM25 + LSA dense hybrid embedder
-│
-├── Storage/
-│   ├── HNSW/                   # HNSW approximate nearest-neighbor index
-│   ├── IVF/                    # IVF flat index (alternative)
-│   └── SQL/                    # SQLAlchemy ORM models + repositories
-│
-├── alembic/                    # Database migration scripts (13 versions)
-│
-└── vidseek-ui/                 # React frontend (Create React App)
 ```
 
 ---
 
 ## Notes
 
-- **GPU:** A CUDA-capable GPU is strongly recommended. The pipeline will run on CPU but Whisper transcription and object detection will be very slow.
-- **Memory:** Processing a typical video requires ~4 GB of RAM. Larger videos or batches may need more.
 - **Vector indices:** The HNSW indices in `data/` grow with each video processed. They are not included in the repository and are created automatically by the pipeline.
