@@ -79,8 +79,11 @@ export function VideoPlayer({ video, onBack }) {
               >
                 <span className={`type-badge type-${r.type}`}>{r.type}</span>
                 <span className="video-result-text">{r.text}</span>
-                {r.source_model && (
+                {r.source_model && r.type == 'transcript' && (
                   <span className={`model-badge model-${r.source_model}`}>{r.source_model}</span>
+                )}
+                {r.model_name && r.type == 'object' && (
+                  <span className="video-result-model">{r.model_name}</span>
                 )}
                 {start && (
                   <span className="video-result-time">

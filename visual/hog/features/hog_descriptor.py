@@ -84,8 +84,6 @@ class HOGDescriptor:
         wy0 = 1.0 - wy1
 
         C = np.zeros((cH * cW, fD), dtype=np.float32)
-        # Reuse a single (fH*fW, fD) buffer for all four bilinear corners
-        # instead of allocating a fresh full copy per corner.
         buf = np.empty((fH * fW, fD), dtype=np.float32)
         four_corners = [
             (iy0 * cW + ix0, wx0 * wy0),
@@ -95,7 +93,6 @@ class HOGDescriptor:
         ]
         F_flat = F.reshape(-1, fD)
         for flat_idx, w in four_corners:
-            # Write weighted pixels into buf in-place - no extra allocation.
             np.multiply(F_flat, w.ravel()[:, np.newaxis], out=buf)
             np.add.at(C, flat_idx.ravel(), buf)
         return C.reshape(cH, cW, fD)
@@ -145,7 +142,6 @@ class HOGDescriptor:
         H, W = img.shape[:2]
  
         level_specs = []
-        # Generate up-scaled and downscaled versions of the image
         for l in range(-cur_lambda, self.n_octaves * cur_lambda):
             scale = 2 ** (l / cur_lambda)
             new_H = int(round(H / scale))

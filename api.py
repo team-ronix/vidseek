@@ -348,12 +348,23 @@ def list_vrd_options():
 def search_by_ocr(q: str, video_id: Optional[int] = None):
     repo = OCRRepository()
     try:
-        word, confidence = repo.find_closest_word_video(q, video_id)
-        if word is None:
+        sorted_words = repo.find_closest_word_video(q, video_id)
+
+        if sorted_words is None:
             return []
-        return [{"type": "ocr", "text": word.word, "video_path": word.video.file_path,
-                 "video_name": word.video.file_name, "start_time": word.start_time,
-                 "end_time": word.end_time, "score": confidence}]
+
+        return [
+            {
+                "type": "ocr",
+                "text": word.word,
+                "video_path": word.video.file_path,
+                "video_name": word.video.file_name,
+                "start_time": word.start_time,
+                "end_time": word.end_time,
+                "score": confidence,
+            }
+            for word, confidence in sorted_words
+        ]
     finally:
         repo.close()
 
