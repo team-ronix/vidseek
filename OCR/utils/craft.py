@@ -64,7 +64,6 @@ class CRAFT(nn.Module):
 
         self.backbone = VGG16()
 
-        # block6 outputs 1024 channels, s5 is 512 → concat = 1536
         self.upconv1 = UpConvBlock(1024 + 512, 256)
         self.upconv2 = UpConvBlock(256 + 512, 128)
         self.upconv3 = UpConvBlock(128 + 256, 64)
@@ -123,7 +122,7 @@ class CRAFT(nn.Module):
         return y.permute(0, 2, 3, 1)
 
 
-def generate_gaussian(size=64):
+def generate_gaussian_kernel(size=64):
     x = np.linspace(-1, 1, size)
     y = np.linspace(-1, 1, size)
     xx, yy = np.meshgrid(x, y)
@@ -131,11 +130,11 @@ def generate_gaussian(size=64):
     return gauss.astype(np.float32)
 
 
-def warp_gaussian(dst_quad, img_h, img_w, gaussian_size=64):
+def create_region_heatmap(dst_quad, img_h, img_w, gaussian_size=64):
     src = np.array([[0, 0], [64, 0], [64, 64], [0, 64]], dtype=np.float32)
     dst = dst_quad.astype(np.float32)
     M = cv2.getPerspectiveTransform(src, dst)
-    gaussian = generate_gaussian(gaussian_size)
+    gaussian = generate_gaussian_kernel(gaussian_size)
     return cv2.warpPerspective(gaussian, M, (img_w, img_h))
 
 
@@ -146,7 +145,7 @@ def make_heatmaps(charBB, img_h, img_w):
     boxes = charBB.transpose(2, 1, 0)
 
     for i, box in enumerate(boxes):
-        region = np.maximum(region, warp_gaussian(box, img_h, img_w))
+        region = np.maximum(region, create_region_heatmap(box, img_h, img_w))
 
         if i + 1 < len(boxes):
             next_box = boxes[i + 1]
@@ -156,7 +155,7 @@ def make_heatmaps(charBB, img_h, img_w):
                 (next_box[2] + next_box[3]) / 2,
                 (box[2] + box[3]) / 2,
             ])
-            affinity = np.maximum(affinity, warp_gaussian(aff_quad, img_h, img_w))
+            affinity = np.maximum(affinity, create_region_heatmap(aff_quad, img_h, img_w))
 
     return region, affinity
 
@@ -182,8 +181,7 @@ def get_word_boxes(region, affinity, region_thresh=0.4, affinity_thresh=0.3, pad
     return boxes
 
 
-def extract_word_images_craft(frame, model, device, img_size=768,
-                               region_thresh=0.4, affinity_thresh=0.3, pad=4):
+def extract_word_images_craft(frame, model, device, img_size=768, region_thresh=0.4, affinity_thresh=0.3, pad=4):
     H, W = frame.shape[:2]
 
     img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -200,8 +198,8 @@ def extract_word_images_craft(frame, model, device, img_size=768,
     with torch.no_grad():
         out = model(t)
 
-    region = out[0, :, :, 0].cpu().numpy()
-    affinity = out[0, :, :, 1].cpu().numpy()
+    region = out[0,:,:,0].cpu().numpy()
+    affinity = out[0,:,:,1].cpu().numpy()
 
     boxes = get_word_boxes(region, affinity, region_thresh, affinity_thresh, pad)
 
@@ -212,10 +210,10 @@ def extract_word_images_craft(frame, model, device, img_size=768,
     word_images = []
     for box in boxes:
         scaled = (box * np.array([sx, sy])).astype(np.int32)
-        x1 = max(int(scaled[:, 0].min()), 0)
-        y1 = max(int(scaled[:, 1].min()), 0)
-        x2 = min(int(scaled[:, 0].max()), W)
-        y2 = min(int(scaled[:, 1].max()), H)
+        x1 = max(int(scaled[:,0].min()), 0)
+        y1 = max(int(scaled[:,1].min()), 0)
+        x2 = min(int(scaled[:,0].max()), W)
+        y2 = min(int(scaled[:,1].max()), H)
         if x2 > x1 and y2 > y1:
             word_images.append(frame[y1:y2, x1:x2])
 
