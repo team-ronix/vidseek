@@ -9,19 +9,17 @@ def construct_Xpos_Xneg(
     pos_patches: dict[str, list[np.ndarray]],
     comp_labels: dict[str, np.ndarray],
     neg_images: list[tuple[str, list]],
-    neg_patches_per_image: int,
+    neg_patches_per_img: int,
 ) -> None:
     n_other_classes = len(detector.classes) - 1
     per_class_other_ratio = detector.other_classes_total_ratio / max(1, n_other_classes)
     for cls in detector.classes:
         pos_patches_cls = pos_patches[cls]
-        comp_labels_cls = comp_labels[cls]
+        comp_lbls_cls = comp_labels[cls]
         for comp in detector.cls_comps[cls]:
             comp_w, comp_h = comp.pixel_w, comp.pixel_h
-
-            # positives
             pos_patches_comp = [
-                p for p, label in zip(pos_patches_cls, comp_labels_cls)
+                p for p, label in zip(pos_patches_cls, comp_lbls_cls)
                 if label == comp.id
             ]
             if not pos_patches_comp:
@@ -31,19 +29,15 @@ def construct_Xpos_Xneg(
                 for p in pos_patches_comp
             ], dtype=np.float16)
             n_pos = len(comp.X_pos)
-
-            # background negatives
             n_bg_target = int(n_pos * detector.bg_multiplier)
-            bg_patches = _sample_background_patches_for_component(
+            bg_patches = _sample_bg_patches_for_comp(
                 neg_images,
                 patch_size=(comp_w, comp_h),
-                n_patches_per_image=neg_patches_per_image,
+                n_patches_per_img=neg_patches_per_img,
                 max_patches=n_bg_target,
             )
             comp.X_bg = np.array([detector._extract_custom_hog(p) for p in bg_patches], dtype=np.float16)
             del bg_patches
-
-            # other-class positives (negatives from other classes)
             n_other_per_cls = max(1, int(n_pos * per_class_other_ratio))
             other_feats = []
             for other_cls in detector.classes:
@@ -69,7 +63,7 @@ def construct_Xpos_Xneg(
                 f"\tBackground: {len(comp.X_bg)}\n"
                 f"\tOther-class: {len(comp.X_pos_other_classes)}\n"
             )
-        del pos_patches_cls, comp_labels_cls
+        del pos_patches_cls, comp_lbls_cls
         gc.collect()
 
 
@@ -95,10 +89,10 @@ def _patch_overlaps_gt(
     return False
 
 
-def _sample_background_patches_for_component(
+def _sample_bg_patches_for_comp(
     neg_images: list[tuple[str, list]],
     patch_size: tuple[int, int],
-    n_patches_per_image: int,
+    n_patches_per_img: int,
     max_patches: int,
     iou_thresh: float = 0.3,
 ) -> list[np.ndarray]:
@@ -117,8 +111,8 @@ def _sample_background_patches_for_component(
             del img
             continue
         cur = 0
-        attempts, max_attempts = 0, 50 * n_patches_per_image
-        while cur < n_patches_per_image and attempts < max_attempts:
+        attempts, max_attempts = 0, 50 * n_patches_per_img
+        while cur < n_patches_per_img and attempts < max_attempts:
             attempts += 1
             x0 = np.random.randint(0, iw - pw + 1)
             y0 = np.random.randint(0, ih - ph + 1)

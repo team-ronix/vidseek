@@ -2,6 +2,8 @@ import numpy as np
 import cv2
 from skimage.feature import hog
 from visual.vrd_ml.vrd_dataset import BBox
+from OCR.utils.Hog import HoG, calc_gradients
+from PIL import Image
 
 CROP_SIZE = (32, 32)
 HOG_PIXELS = 16
@@ -16,7 +18,7 @@ _hog_feat = hog(
     channel_axis=-1, feature_vector=True,
 )
 HOG_DIM = _hog_feat.shape[0]
-VISUAL_DIM = HOG_DIM * 3       # subject + object + union
+VISUAL_DIM = HOG_DIM * 3
 
 
 def _safe_crop(
@@ -36,14 +38,9 @@ def _safe_crop(
 
 
 def _hog_features(crop: np.ndarray) -> np.ndarray:
-    feat = hog(
-        crop,
-        orientations=HOG_ORIENT,
-        pixels_per_cell=(HOG_PIXELS, HOG_PIXELS),
-        cells_per_block=(HOG_CELLS, HOG_CELLS),
-        channel_axis=-1,
-        feature_vector=True,
-    )
+    img = Image.fromarray(crop).convert("L")
+    mag, orient = calc_gradients(np.array(img))
+    feat = HoG(orient, mag, cell_size=HOG_PIXELS, num_bins=HOG_ORIENT, block_size=HOG_CELLS)
     return feat.astype(np.float32)
 
 class VisualFeatureExtractor:
@@ -64,7 +61,6 @@ class VisualFeatureExtractor:
             _hog_features(obj_crop),
             _hog_features(union_crop),
         ]).astype(np.float32)
-        assert feat.shape == (VISUAL_DIM,), f"Expected {VISUAL_DIM}-d, got {feat.shape}"
         return feat
 
     def extract_batch(

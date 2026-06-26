@@ -4,9 +4,7 @@ from typing import Tuple
 from visual.hog.datastructures.feature_level import FeatureLevel
 from concurrent.futures import ThreadPoolExecutor
 
-# n_orient_cs: orientation bins for contrast-sensitive features (0-360 degrees)
-# n_orient_ci: orientation bins for contrast-insensitive features (0-180 degrees)
-# alpha: truncation threshold for normalized cell features
+
 class HOGDescriptor:
     def __init__(
             self, cell_size: int = 8, 
@@ -54,8 +52,8 @@ class HOGDescriptor:
         return mag, orient
 
     def _pixel_feature_map(self, mag, orient) -> Tuple[np.ndarray, np.ndarray]:
-        mgH, mgW = mag.shape
-        rows, cols = np.mgrid[:mgH, :mgW]
+        mgH,mgW = mag.shape
+        rows,cols = np.mgrid[:mgH, :mgW]
         cs_bins = np.mod(np.round(orient / (2 * np.pi) * self.n_orient_cs).astype(int), self.n_orient_cs)
         ci_bins = np.mod(np.round(orient / np.pi * self.n_orient_ci).astype(int), self.n_orient_ci)
         F_cs = np.zeros((mgH, mgW, self.n_orient_cs), dtype=np.float32)
@@ -66,55 +64,49 @@ class HOGDescriptor:
     
     def _spatial_aggregate(self, F: np.ndarray) -> np.ndarray:
         fH, fW, fD = F.shape
-        cH = (fH - 1) // self.cell_size + 1
-        cW = (fW - 1) // self.cell_size + 1
-
+        cH= (fH - 1) // self.cell_size + 1
+        cW =(fW - 1) // self.cell_size + 1
         rows, cols = np.mgrid[:fH, :fW]
         cx = (cols / self.cell_size - 0.5).clip(0)
         cy = (rows / self.cell_size - 0.5).clip(0)
-
-        ix0 = cx.astype(np.int32).clip(0, cW - 1)
+        ix0= cx.astype(np.int32).clip(0, cW - 1)
         ix1 = (ix0 + 1).clip(0, cW - 1)
         wx1 = (cx - ix0).astype(np.float32).clip(0, 1)
         wx0 = 1.0 - wx1
-
         iy0 = cy.astype(np.int32).clip(0, cH - 1)
         iy1 = (iy0 + 1).clip(0, cH - 1)
         wy1 = (cy - iy0).astype(np.float32).clip(0, 1)
         wy0 = 1.0 - wy1
-
         C = np.zeros((cH * cW, fD), dtype=np.float32)
-        buf = np.empty((fH * fW, fD), dtype=np.float32)
-        four_corners = [
+        cor = [
             (iy0 * cW + ix0, wx0 * wy0),
             (iy0 * cW + ix1, wx1 * wy0),
             (iy1 * cW + ix0, wx0 * wy1),
             (iy1 * cW + ix1, wx1 * wy1),
         ]
-        F_flat = F.reshape(-1, fD)
-        for flat_idx, w in four_corners:
-            np.multiply(F_flat, w.ravel()[:, np.newaxis], out=buf)
-            np.add.at(C, flat_idx.ravel(), buf)
+        for flat_idx, w in cor:
+            contribution = (F * w[:, :, np.newaxis]).reshape(-1, fD) 
+            np.add.at(C, flat_idx.ravel(), contribution)
         return C.reshape(cH, cW, fD)
 
     def _normalize(self, C: np.ndarray, epsilon: float = 1e-5) -> np.ndarray:
         cH, cW, _ = C.shape
-        energy = (C ** 2).sum(axis=2)
-        dx_dy_pairs = [(-1, -1), (1, -1), (-1, 1), (1, 1)]
+        en = (C ** 2).sum(axis=2)
+        pairs = [(-1, -1), (1, -1), (-1, 1), (1, 1)]
         N = np.zeros((cH, cW, self.n_energy), dtype=np.float32)
         rows = np.arange(cH)
         cols = np.arange(cW)
-        for k, (dx, dy) in enumerate(dx_dy_pairs):
-            shift_r = np.clip(rows + dx, 0, cH - 1)
-            shift_c = np.clip(cols + dy, 0, cW - 1)
-            energy_shifted_r = energy[shift_r, :]
-            energy_shifted_c = energy[:, shift_c]
-            energy_shifted_rc = energy[(shift_r.reshape(-1, 1), shift_c)]
-            N[:, :, k] = np.sqrt(energy + energy_shifted_r + energy_shifted_c + energy_shifted_rc + epsilon)
+        for k, (dx, dy) in enumerate(pairs):
+            sh_r = np.clip(rows + dx, 0, cH - 1)
+            sh_c = np.clip(cols + dy, 0, cW - 1)
+            en_sh_r = en[sh_r, :]
+            en_sh_c = en[:, sh_c]
+            en_sh_rc = en[(sh_r.reshape(-1, 1), sh_c)]
+            N[:, :, k] = np.sqrt(en + en_sh_r + en_sh_c + en_sh_rc + epsilon)
         return N
     
     def _feature_analysis(self, C_CI: np.ndarray, C_CS: np.ndarray, N: np.ndarray) -> np.ndarray:
-        nH, nW, _ = C_CI.shape
+        nH,nW,_ = C_CI.shape
         G = np.zeros((nH, nW, self.feature_dim), dtype=np.float32)
         for i in range(self.n_energy):
             n = N[:, :, i]
@@ -137,13 +129,12 @@ class HOGDescriptor:
         return G
 
     def compute_feature_pyramid(self, image:np.ndarray, llambda=None) -> list:
-        cur_lambda = llambda if llambda is not None else self.llambda
+        cur_lam = llambda if llambda is not None else self.llambda
         img = self._process_img(image)
         H, W = img.shape[:2]
- 
         level_specs = []
-        for l in range(-cur_lambda, self.n_octaves * cur_lambda):
-            scale = 2 ** (l / cur_lambda)
+        for l in range(-cur_lam, self.n_octaves * cur_lam):
+            scale = 2 ** (l / cur_lam)
             new_H = int(round(H / scale))
             new_W = int(round(W / scale))
             if new_H < self.min_size or new_W < self.min_size:
@@ -151,11 +142,9 @@ class HOGDescriptor:
             if new_H > 2 * H or new_W > 2 * W:
                 continue
             level_specs.append((l, scale, new_H, new_W, img))
- 
         max_workers = min(len(level_specs), (cv2.getNumberOfCPUs() or 4))
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             pyramid = list(executor.map(self._process, level_specs))
- 
         return pyramid
     
     def _process(self, spec):

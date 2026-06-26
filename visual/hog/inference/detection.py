@@ -3,7 +3,8 @@ import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 from concurrent.futures import ThreadPoolExecutor
 from collections import defaultdict
-from visual.hog.datastructures.bbox_regressor import BBoxRegressor
+from visual.hog.utils import apply_deltas_batch
+
 
 
 def _score_level(feat_map, comp, step):
@@ -38,7 +39,7 @@ def _boxes_from_hits(hit_flat, n_xs, step, level_scale, comp_ch, comp_cw, cell_s
 
 def multiscale_detect_one_comp(detector, pyramid, comp, internal_threshold: float = 0.05):
     detections, det_scores = [], []
-    bbox_regressor = comp.bbox_regressor if comp.bbox_regressor.fitted else None
+    bbox_reg = comp.bbox_reg if comp.bbox_reg.fitted else None
     ch = comp.cell_h
     cw = comp.cell_w
     step = detector.pyramid_step
@@ -56,17 +57,17 @@ def multiscale_detect_one_comp(detector, pyramid, comp, internal_threshold: floa
 
         boxes = _boxes_from_hits(hit_flat, n_xs, step, level.scale, ch, cw, cell_size)
         hit_scores = scores_all[hit_flat].tolist()
-        if bbox_regressor is not None:
+        if bbox_reg is not None:
             hit_feats = X[hit_flat]
-            all_deltas = bbox_regressor.predict(hit_feats)
-            boxes = BBoxRegressor.apply_deltas_batch(boxes, all_deltas)
+            all_deltas = bbox_reg.predict(hit_feats)
+            boxes = apply_deltas_batch(boxes, all_deltas)
         detections.extend(boxes)
         det_scores.extend(hit_scores)
         del scores_all, X
     return detections, det_scores
 
 
-def non_max_suppression(boxes, scores, overlap_threshold: float):
+def nms(boxes, scores, overlap_threshold: float):
     if not boxes:
         return [], []
     boxes = np.array(boxes)
@@ -120,15 +121,11 @@ def detect(
         if dets:
             cls_dets_map[cls][0].extend(dets)
             cls_dets_map[cls][1].extend(sc)
-
     for cls, (cls_dets, cls_scores) in cls_dets_map.items():
-        filtered_dets, filtered_scores = non_max_suppression(
-            cls_dets, cls_scores, overlap_threshold
-        )
+        filtered_dets, filtered_scores = nms(cls_dets, cls_scores, overlap_threshold)
         all_boxes.extend(filtered_dets)
         all_scores.extend(filtered_scores)
         all_labels.extend([cls] * len(filtered_dets))
-
     if all_boxes:
         order = np.argsort(all_scores)[::-1]
         all_boxes = [all_boxes[i] for i in order]

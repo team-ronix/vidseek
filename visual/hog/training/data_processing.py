@@ -27,8 +27,8 @@ def process_dataset(
         if img is None:
             continue
         ih, iw = img.shape[:2]
-        boxes, labels = dataset.get_annotation(index)
-        for (xmin, ymin, xmax, ymax), cls in zip(boxes, labels):
+        boxes, lbls = dataset.get_annotation(index)
+        for (xmin, ymin, xmax, ymax), cls in zip(boxes, lbls):
             if cls not in detector.classes:
                 continue
             x0, y0 = max(0, int(xmin)), max(0, int(ymin))
@@ -53,22 +53,19 @@ def process_dataset(
             img_path = dataset._img_path(dataset.image_ids[index])
             if img_path is not None:
                 neg_images.append((img_path, all_gt))
-        del img, boxes, labels
+        del img, boxes, lbls
         if (loop_index + 1) % 100 == 0:
             gc.collect()
-
     print("\nPositive patches per class:")
     for cls in detector.classes:
-        print(f"{cls:15s}: {len(pos_patches[cls]):5d}  (raw bboxes: {len(bboxes_wh[cls])})")
+        print(f"{cls}: {len(pos_patches[cls]):5d}  (raw bboxes: {len(bboxes_wh[cls])})")
     print(f"\nBackground image paths collected: {len(neg_images)}")
     gc.collect()
     return dict(pos_patches), dict(bboxes_wh), dict(gt_boxes), neg_images
 
 
 def learn_window_sizes(detector, bboxes_wh: dict) -> dict:
-    comp_labels: dict[str, np.ndarray] = {
-        cls: np.zeros(0, dtype=int) for cls in detector.classes
-    }
+    comp_labels: dict[str, np.ndarray] = {cls: np.zeros(0, dtype=int) for cls in detector.classes}
     for cls in detector.classes:
         whs_cls = np.array(bboxes_wh[cls]) if bboxes_wh[cls] else np.empty((0, 2))
         if len(whs_cls) == 0:
@@ -81,10 +78,9 @@ def learn_window_sizes(detector, bboxes_wh: dict) -> dict:
             )
             comp_labels[cls] = np.zeros(0, dtype=int)
             continue
-
         aspect_ratios = whs_cls[:, 0] / whs_cls[:, 1]
         n_samples = len(aspect_ratios)
-        min_positives = _min_component_positives(n_samples)
+        min_pos = _min_component_positives(n_samples)
         k = min(detector.n_components, n_samples)
         kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
         raw_ids = kmeans.fit_predict(aspect_ratios.reshape(-1, 1))
@@ -93,51 +89,41 @@ def learn_window_sizes(detector, bboxes_wh: dict) -> dict:
         label_counts = dict(zip(unique_labels.tolist(), counts.tolist()))
         surviving = [
             lbl for lbl in unique_labels
-            if label_counts[lbl] >= min_positives
+            if label_counts[lbl] >= min_pos
         ]
         sparse = [
             lbl for lbl in unique_labels
-            if label_counts[lbl] < min_positives
+            if label_counts[lbl] < min_pos
         ]
-
         if sparse:
             print(
                 f"[{cls}] Merging {len(sparse)} sparse cluster(s) "
-                f"(< {min_positives} samples, adaptive threshold for {n_samples} total) "
+                f"(< {min_pos} samples, adaptive threshold for {n_samples} total) "
                 f"into nearest surviving cluster."
             )
         if not surviving:
             surviving = [unique_labels[np.argmax(counts)]]
             sparse = [lbl for lbl in unique_labels if lbl not in surviving]
-            print(
-                f"[{cls}] All clusters sparse - keeping largest cluster only."
-            )
-        surviving_centroids = np.array(
-            [kmeans.cluster_centers_[lbl][0] for lbl in surviving]
-        )
+            print(f"[{cls}] All clusters sparse - keeping largest cluster only.")
+        surviving_centroids = np.array([kmeans.cluster_centers_[lbl][0] for lbl in surviving])
         final_ids = raw_ids.copy()
         for sp_lbl in sparse:
             sp_centroid = kmeans.cluster_centers_[sp_lbl][0]
-            nearest_surviving = surviving[
-                int(np.argmin(np.abs(surviving_centroids - sp_centroid)))
-            ]
+            nearest_surviving = surviving[int(np.argmin(np.abs(surviving_centroids - sp_centroid)))]
             final_ids[raw_ids == sp_lbl] = nearest_surviving
-            
         for orig_label in surviving:
             members = aspect_ratios[final_ids == orig_label]
             if len(members) > 0:
                 kmeans.cluster_centers_[orig_label][0] = float(members.mean())
                 print(
                     f"[{cls}] Cluster {orig_label}: centroid updated to "
-                    f"{kmeans.cluster_centers_[orig_label][0]:.4f} "
+                    f"{kmeans.cluster_centers_[orig_label][0]} "
                     f"(from {len(members)} merged members)"
                 )
-
         present_labels = sorted(set(final_ids.tolist()))
         label_to_comp_id = {lbl: cid for cid, lbl in enumerate(present_labels)}
         remapped_ids = np.array([label_to_comp_id[l] for l in final_ids], dtype=int)
         comp_labels[cls] = remapped_ids
-
         for comp_id, orig_label in enumerate(present_labels):
             comp_bboxes_whs = whs_cls[final_ids == orig_label]
             member_count = len(comp_bboxes_whs)
@@ -150,7 +136,6 @@ def learn_window_sizes(detector, bboxes_wh: dict) -> dict:
                     _make_component(detector, comp_id=comp_id, cls=cls)
                 )
                 continue
-
             comp_aspect = np.mean(comp_bboxes_whs[:, 0] / comp_bboxes_whs[:, 1])
             areas = comp_bboxes_whs[:, 0] * comp_bboxes_whs[:, 1]
             comp_area = np.percentile(areas, detector.area_percentile)

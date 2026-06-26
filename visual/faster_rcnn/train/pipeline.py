@@ -40,11 +40,11 @@ def run_eval(model, loader, desc, num_classes, device):
                 gt_difficult=gt_dl[0].cpu()
             )
     mAP, aps = evaluator.compute_map()
-    print(f'\n{desc} - mAP @ IoU=0.5 : {mAP*100:.1f}%')
-    print(f"  {'Class':<16} {'AP':>6}")
+    print(f'\n{desc} - mAP @ IoU=0.5 : {mAP*100:.2f}%')
+    print(f"  {'Class'}: {'AP'}")
     print(f"  {'-'*24}")
     for cls, ap in sorted(aps.items(), key=lambda x: -x[1]):
-        print(f"  {cls:<16s} {ap*100:5.1f}%")
+        print(f"  {cls}: {ap*100:.2f}%")
     return mAP, aps
 
 def save_chart(mAP, aps, save_path):

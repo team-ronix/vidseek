@@ -60,26 +60,20 @@ class ObjectDetector:
             scene = frame_data['scene']
             frame_count = frame_data['frame_count_in_scene']
             frame = frame_data['frame']
-            
             print(f"[{i}/{len(self.frames)}] Scene {scene.index}: Start at {scene.start_time:.2f}s, End at {scene.end_time:.2f}s, Duration {scene.duration:.2f}s ({frame_count} frames)")
             print(f"\tProcessing frame {frame_number}")
-            
             if frame_number is None or frame is None:
                 objects.append([])
                 continue
-
             results = self._build_results(frame)
-            results.sort(key=lambda x: x[1], reverse=True)  # Sort results by score
+            results.sort(key=lambda x: x[1], reverse=True)
             objects.append(results)
-            for name, conf, box in results:    
+            for name, conf, box in results:
                 print(f"       - Detected '{name}' with confidence {conf:.2f}")
                 if name not in self.inverted_index:
                     self.inverted_index[name] = []
-                
-                # Skip if already exists in this scene
                 if any(occ['scene'] == scene.index for occ in self.inverted_index[name]):
                     continue
-
                 self.inverted_index[name].append({
                     'scene': scene.index,
                     'frame': frame_number,

@@ -10,7 +10,7 @@ _ObjDetector_DIR = os.path.dirname(os.path.abspath(__file__))
 _FASTER_RCNN_MODEL_PATH = os.path.join(_ObjDetector_DIR, 'faster_rcnn_final.pth')
 
 class ObjectDetector:
-    def __init__(self, video_path, frames, score_thresh=0.6):
+    def __init__(self, video_path, frames, score_thresh=0.7):
         self.video_path = video_path
         self.frames = frames
         self.inverted_index = {}
