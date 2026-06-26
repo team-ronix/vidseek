@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from visual.faster_rcnn.model.backbone import VGG16Backbone
 from visual.faster_rcnn.model.rpn import RPN
 from visual.faster_rcnn.model.detection_head import DetectionHead
-from visual.faster_rcnn.utils.box_utils import bbox_transform_inv, clip_boxes, nms
+from visual.faster_rcnn.utils.box_utils import bbox_trans_inv, clip_boxes, nms
 
 
 class FasterRCNN(nn.Module):
@@ -34,15 +34,13 @@ class FasterRCNN(nn.Module):
         self.det_head = DetectionHead(num_classes=num_classes, pretrained=pretrained)
 
     def forward(self, images, img_shapes, gt_boxes=None, gt_labels=None):
-        # images are batched and first dimension (dim0) is batch size, but faster r-cnn processes one image at a time, 
-        # so we will only use the first image in the batch and ignore the rest if any.
         img_shape = img_shapes[0]
         gt_b = gt_boxes[0] if gt_boxes is not None else None
         gt_l = gt_labels[0] if gt_labels is not None else None
         feat = self.backbone(images)
-        proposals, rpn_cls, rpn_reg = self.rpn(feat, img_shape, gt_b)
+        props, rpn_cls, rpn_reg = self.rpn(feat, img_shape, gt_b)
         if self.training:
-            det_cls, det_reg = self.det_head(feat, proposals, gt_b, gt_l)
+            det_cls, det_reg = self.det_head(feat, props, gt_b, gt_l)
             total = rpn_cls + rpn_reg + det_cls + det_reg
             return dict(
                 rpn_cls_loss=rpn_cls,
@@ -52,33 +50,33 @@ class FasterRCNN(nn.Module):
                 total_loss=total
             )
         else:
-            cls_sc, bbox_d, props = self.det_head(feat, proposals)
+            cls_sc, bbox_d, props = self.det_head(feat, props)
             return self._post(cls_sc, bbox_d, props, img_shape)
 
 
     def _post(self, cls_sc, bbox_d, props, img_shape):
         probs = F.softmax(cls_sc, 1)
-        all_boxes, all_scores, all_labels = [], [], []
+        all_bxs, all_scs, all_lbls = [], [], []
         for c in range(1, self.num_classes + 1):
             sc = probs[:, c]
             d = bbox_d[:, c*4:(c+1)*4]
-            bx = clip_boxes(bbox_transform_inv(props, d), img_shape)
+            bx = clip_boxes(bbox_trans_inv(props, d), img_shape)
             keep = sc >= self.score_thresh
             if keep.sum() == 0: continue
             bx, sc = bx[keep], sc[keep]
             keep2 = nms(bx, sc, self.nms_thresh)
-            all_boxes.append(bx[keep2])
-            all_scores.append(sc[keep2])
-            all_labels.append(torch.full((keep2.numel(),), c, dtype=torch.long, device=sc.device))
-        if all_boxes:
-            boxes = torch.cat(all_boxes)
-            scores = torch.cat(all_scores)
-            labels = torch.cat(all_labels)
-            if len(scores) > self.max_dets:
-                idx = scores.topk(self.max_dets).indices
-                boxes, scores, labels = boxes[idx], scores[idx], labels[idx]
+            all_bxs.append(bx[keep2])
+            all_scs.append(sc[keep2])
+            all_lbls.append(torch.full((keep2.numel(),), c, dtype=torch.long, device=sc.device))
+        if all_bxs:
+            bxs = torch.cat(all_bxs)
+            scrs = torch.cat(all_scs)
+            lbls = torch.cat(all_lbls)
+            if len(scrs) > self.max_dets:
+                idx = scrs.topk(self.max_dets).indices
+                bxs, scrs, lbls = bxs[idx], scrs[idx], lbls[idx]
         else:
-            boxes = torch.zeros((0,4))
-            scores = torch.zeros(0)
-            labels = torch.zeros(0, dtype=torch.long)
-        return [dict(boxes=boxes, scores=scores, labels=labels)]
+            bxs = torch.zeros((0,4))
+            scrs = torch.zeros(0)
+            lbls = torch.zeros(0, dtype=torch.long)
+        return [dict(boxes=bxs, scores=scrs, labels=lbls)]

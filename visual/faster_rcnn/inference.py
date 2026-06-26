@@ -34,7 +34,7 @@ def infer(args):
     scaled_H, scaled_W = img.shape[1], img.shape[2]
     with torch.no_grad():
         res = model(img.unsqueeze(0).to(DEVICE), [(scaled_H, scaled_W)])[0]
-    pred_boxes  = res['boxes'].cpu()
+    pred_boxes = res['boxes'].cpu()
     pred_scores = res['scores'].cpu()
     pred_labels = res['labels'].cpu()
     print(f'\nDetections ({len(pred_scores)} found):')
