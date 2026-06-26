@@ -8,10 +8,6 @@ class AnchorGenerator:
         ratios=(0.5, 1.0, 2.0),
         feat_stride=16,
     ):
-        # feat_stride is the downsampling factor of the feature map relative to the input image produced by the backbone.
-        # although vgg16 reduces the spatial resolution by a factor of 32 after its five max-pooling layers (2^5 = 32), 
-        # faster r-cnn uses the feature map before the final pooling layer (uses four max pooling layers), resulting in an effective stride of 16 (2^4) pixels.
-        # that means moving one cell in the feature map corresponds to moving 16 pixels in the original image.
         self.scales = np.array(scales, dtype=np.float32)
         self.ratios = np.array(ratios, dtype=np.float32)
         self.feat_stride = feat_stride

@@ -32,7 +32,7 @@ def run_eval(model, loader, desc, num_classes, device):
     with torch.no_grad():
         for imgs, shapes, gt_bl, gt_ll, gt_dl, ids in tqdm(loader, desc=desc):
             imgs = imgs.to(device)
-            res  = model(imgs, shapes)[0]
+            res = model(imgs, shapes)[0]
             evaluator.update(
                 ids[0],
                 res['boxes'].cpu(), res['scores'].cpu(), res['labels'].cpu(),
@@ -48,16 +48,16 @@ def run_eval(model, loader, desc, num_classes, device):
     return mAP, aps
 
 def save_chart(mAP, aps, save_path):
-    _CLASS_COLORS = [
+    colors = [
         '#e6194b','#3cb44b','#ffe119','#4363d8','#f58231',
         '#911eb4','#42d4f4','#f032e6','#bfef45','#fabed4',
         '#469990','#dcbeff','#9A6324','#fffac8','#800000',
         '#aaffc3','#808000','#ffd8b1','#000075','#a9a9a9',
     ]
     sorted_items = sorted(aps.items(), key=lambda x: -x[1])
-    cls_names    = [k for k, _ in sorted_items]
-    ap_vals      = [v * 100 for _, v in sorted_items]
-    colors       = [_CLASS_COLORS[list(VOC_CLASSES).index(c) % 20] for c in cls_names]
+    cls_names = [k for k, _ in sorted_items]
+    ap_vals = [v * 100 for _, v in sorted_items]
+    colors = [colors[list(VOC_CLASSES).index(c) % 20] for c in cls_names]
 
     fig, ax = plt.subplots(figsize=(14, 5))
     bars = ax.barh(cls_names, ap_vals, color=colors, edgecolor='white', height=0.7)

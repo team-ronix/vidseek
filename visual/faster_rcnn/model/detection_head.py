@@ -3,23 +3,23 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.ops import roi_align
 from torchvision.models import vgg16 as _vgg16
-from visual.faster_rcnn.utils.box_utils import bbox_transform, iou_matrix
+from visual.faster_rcnn.utils.box_utils import bbox_trans, iou_matrix
 
 class RoIPool(nn.Module):
-    def __init__(self, out_size=7, spatial_scale=1/16):
+    def __init__(self, out_size=7, scale=1/16):
         super().__init__()
         self.out_size = out_size
-        self.spatial_scale = spatial_scale
+        self.scale = scale
 
     def forward(self, feat, rois):
         N = rois.shape[0]
         C = feat.shape[1]
         out = torch.zeros(N, C, self.out_size, self.out_size, device=feat.device, dtype=feat.dtype)
         for i in range(N):
-            x1 = (rois[i,0]*self.spatial_scale).floor().long().clamp(min=0)
-            y1 = (rois[i,1]*self.spatial_scale).floor().long().clamp(min=0)
-            x2 = (rois[i,2]*self.spatial_scale).ceil().long().clamp(min=x1+1)
-            y2 = (rois[i,3]*self.spatial_scale).ceil().long().clamp(min=y1+1)
+            x1 = (rois[i,0]*self.scale).floor().long().clamp(min=0)
+            y1 = (rois[i,1]*self.scale).floor().long().clamp(min=0)
+            x2 = (rois[i,2]*self.scale).ceil().long().clamp(min=x1+1)
+            y2 = (rois[i,3]*self.scale).ceil().long().clamp(min=y1+1)
             x2 = x2.clamp(max=feat.shape[3])
             y2 = y2.clamp(max=feat.shape[2])
             roi_f = feat[0, :, y1:y2, x1:x2]
@@ -28,10 +28,10 @@ class RoIPool(nn.Module):
         return out
 
 class RoIAlign(nn.Module):
-    def __init__(self, out_size=7, spatial_scale=1/16):
+    def __init__(self, out_size=7, scale=1/16):
         super().__init__()
         self.out_size = out_size
-        self.spatial_scale = spatial_scale
+        self.scale = scale
 
     def forward(self, feat, rois):
         if rois.numel() == 0:
@@ -43,7 +43,7 @@ class RoIAlign(nn.Module):
             feat,
             boxes,
             output_size=self.out_size,
-            spatial_scale=self.spatial_scale,
+            spatial_scale=self.scale,
             sampling_ratio=-1,
             aligned=True,
         )
@@ -96,8 +96,7 @@ class DetectionHead(nn.Module):
 
     def forward(self, feat, proposals, gt_boxes=None, gt_labels=None):
         if self.training and gt_boxes is not None:
-            proposals, labels, reg_tgt = self._sample(proposals, gt_boxes, gt_labels)
-            
+            proposals, lbls, reg_tgt = self._sample(proposals, gt_boxes, gt_labels)
         if proposals.shape[0] == 0:
             C = self.num_classes
             device = feat.device
@@ -109,58 +108,52 @@ class DetectionHead(nn.Module):
             # return zero losses as tensors (not integer zero) to avoid issues with autograd
             # and use .backward() for backpropagation to compute gradients without errors
             return z, z
-
         pooled = self.roi(feat, proposals)
         flat = pooled.flatten(start_dim=1)
         x = F.relu(self.fc6(flat), inplace=True)
         x = F.relu(self.fc7(x), inplace=True)
         cls_sc = self.cls_score(x)
         bbox = self.bbox_pred(x)
-
         if not self.training or gt_boxes is None:
             std_rep = self.reg_std.repeat(self.num_classes + 1)
             return cls_sc, bbox * std_rep, proposals
-
-        cls_loss = F.cross_entropy(cls_sc, labels)
-        # ignore background and focus on positive samples for regression loss as label of background is 0
-        pos_mask = labels > 0
+        cls_loss = F.cross_entropy(cls_sc, lbls)
+        pos_mask = lbls > 0
         reg_loss = cls_sc.sum() * 0.0
         if pos_mask.sum() > 0:
-            pc = labels[pos_mask]
+            pc = lbls[pos_mask]
             idx = (pc * 4).unsqueeze(1) + torch.arange(4, device=cls_sc.device)
             pred = bbox[pos_mask].gather(1, idx)
             reg_loss = self.lam * F.smooth_l1_loss(pred, reg_tgt[pos_mask])
-
         return cls_loss, reg_loss
 
-    def _sample(self, proposals, gt_boxes, gt_labels):
+    def _sample(self, props, gt_boxes, gt_lbls):
         if gt_boxes.shape[0] == 0:
-            n = proposals.shape[0]
-            labels = torch.zeros(n, dtype=torch.long, device=proposals.device)
-            reg_tgt = torch.zeros((n, 4), dtype=proposals.dtype, device=proposals.device)
+            n = props.shape[0]
+            lbls = torch.zeros(n, dtype=torch.long, device=props.device)
+            reg_tgt = torch.zeros((n, 4), dtype=props.dtype, device=props.device)
             ni = torch.randperm(n)[:self.batch]
-            return proposals[ni], labels[ni], reg_tgt[ni]
-        
-        proposals = torch.cat([proposals, gt_boxes], 0)
-        ious = iou_matrix(proposals, gt_boxes)
+            return props[ni], lbls[ni], reg_tgt[ni]
+        props = torch.cat([props, gt_boxes], 0)
+        ious = iou_matrix(props, gt_boxes)
         max_iou, best_gt = ious.max(1)
-        labels = torch.zeros(len(proposals), dtype=torch.long, device=proposals.device)
+        lbls = torch.zeros(len(props), dtype=torch.long, device=props.device)
         fg = max_iou >= self.pos_iou
-        labels[fg] = gt_labels[best_gt[fg]]
+        lbls[fg] = gt_lbls[best_gt[fg]]
         bg = (max_iou >= self.neg_iou_lo) & (max_iou < self.neg_iou_hi)
-        labels[~fg & ~bg] = -1
+        lbls[~fg & ~bg] = -1
         num_pos = int(self.batch * self.pos_frac)
         pi = fg.nonzero(as_tuple=True)[0]
         ni = bg.nonzero(as_tuple=True)[0]
         if len(pi) > num_pos:
-            labels[pi[torch.randperm(len(pi))[num_pos:]]] = -1
+            lbls[pi[torch.randperm(len(pi))[num_pos:]]] = -1
         num_neg = self.batch - min(len(pi), num_pos)
         if len(ni) > num_neg:
-            labels[ni[torch.randperm(len(ni))[num_neg:]]] = -1
-        valid = labels >= 0
-        proposals = proposals[valid]
-        labels = labels[valid]
+            lbls[ni[torch.randperm(len(ni))[num_neg:]]] = -1
+        valid = lbls >= 0
+        props = props[valid]
+        lbls = lbls[valid]
         best_gt = best_gt[valid]
-        reg_tgt = bbox_transform(proposals, gt_boxes[best_gt])
+        reg_tgt = bbox_trans(props, gt_boxes[best_gt])
         reg_tgt = reg_tgt / self.reg_std
-        return proposals, labels, reg_tgt
+        return props, lbls, reg_tgt

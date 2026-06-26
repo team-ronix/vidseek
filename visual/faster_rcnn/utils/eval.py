@@ -28,7 +28,6 @@ class VOCEvaluator:
         for c in range(1, self.num_classes+1):
             m = gt_labels == c
             boxes = gt_boxes[m] if m.any() else torch.zeros((0,4))
-            # store difficult flags alongside boxes
             if gt_difficult is not None and m.any():
                 diff = gt_difficult[m]
             else:
@@ -46,10 +45,6 @@ class VOCEvaluator:
         return mAP, aps
 
     def _ap(self, c):
-        # A predicted box is TP if:
-        #   Predicted class is correct
-        #   IoU with a ground-truth box is above threshold
-        #   That ground-truth object was not already matched by another prediction
         dets = sorted(self.dets.get(c, []), key=lambda x: -x[1])
         n_gt = sum(
             (~diff).sum().item()
@@ -57,7 +52,6 @@ class VOCEvaluator:
         )
         if not dets or n_gt == 0:
             return 0.0
-
         matched = defaultdict(set)
         tp = np.zeros(len(dets))
         fp = np.zeros(len(dets))
@@ -70,11 +64,9 @@ class VOCEvaluator:
             if len(gt) == 0:
                 fp[i] = 1
                 continue
-
             ious = _iou_one(box, gt)
             best_iou, best_j = ious.max(0)
             best_j = best_j.item()
-
             if best_iou >= self.iou_thresh and best_j not in matched[img_id]:
                 if diff[best_j]:
                     pass
@@ -83,7 +75,6 @@ class VOCEvaluator:
                     matched[img_id].add(best_j)
             else:
                 fp[i] = 1
-
         tp_c = np.cumsum(tp)
         fp_c = np.cumsum(fp)
         rec = tp_c / (n_gt + 1e-8)
