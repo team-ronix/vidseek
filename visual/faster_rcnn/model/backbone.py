@@ -7,7 +7,6 @@ class VGG16Backbone(nn.Module):
         if pretrained:
             vgg = tvm.vgg16(weights=tvm.VGG16_Weights.IMAGENET1K_V1)
             features = list(vgg.features.children())
-            # blocks 1 to 4 with their max pooling layers, block5 without its max pooling layer
             self.block1 = nn.Sequential(*features[0:5])
             self.block2 = nn.Sequential(*features[5:10])
             self.block3 = nn.Sequential(*features[10:17])
@@ -40,7 +39,6 @@ class VGG16Backbone(nn.Module):
                 nn.Conv2d(512, 512, kernel_size=3, padding=1), nn.ReLU(inplace=True),
                 nn.Conv2d(512, 512, kernel_size=3, padding=1), nn.ReLU(inplace=True),
                 nn.Conv2d(512, 512, kernel_size=3, padding=1), nn.ReLU(inplace=True)
-                # removing the last max pool layer
             )
             self._init_weights()
             
@@ -57,5 +55,4 @@ class VGG16Backbone(nn.Module):
         x = self.block3(x)
         x = self.block4(x)
         x = self.block5(x)
-        # the width and height of the feature map are reduced by a factor of 16 compared to the input image because of the 4 max pooling layers (2^4 = 16)
         return x

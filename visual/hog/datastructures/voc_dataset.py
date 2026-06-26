@@ -3,8 +3,7 @@ import xml.etree.ElementTree as ET
 import cv2
 
 
-# image_set_file is txt file contains image ids (without extension) for the split, one per line for example: train.txt, val.txt 
-# If not provided, it will use all XML files in Annotations directory
+
 class VOCDataset:
     def __init__(self, root, image_set_file=None, class_to_idx=None):
         self.root = root
@@ -20,8 +19,6 @@ class VOCDataset:
         else:
             self.image_ids = [os.path.splitext(fn)[0] for fn in os.listdir(self.annot_dir) if fn.endswith('.xml')]
             print(f'Directory fallback: {len(self.image_ids)} XML annotations found.')
-            
-        # filter out ids that don't have corresponding images or annotations
         self.image_ids = [
             image_id for image_id in self.image_ids
             if self._img_path(image_id) is not None
@@ -39,7 +36,7 @@ class VOCDataset:
         annot_path = os.path.join(self.annot_dir, f'{image_id}.xml')
         tree = ET.parse(annot_path)
         root = tree.getroot()
-        boxes, labels = [], []
+        boxes, lbls = [], []
         for obj in root.findall('object'):
             name = obj.find('name').text.strip().lower()
             if name not in self.class_to_idx: continue
@@ -48,8 +45,8 @@ class VOCDataset:
             xmax, ymax = float(bb.find('xmax').text), float(bb.find('ymax').text)
             if xmax > xmin and ymax > ymin:
                 boxes.append([xmin, ymin, xmax, ymax])
-                labels.append(name)
-        return boxes, labels
+                lbls.append(name)
+        return boxes, lbls
 
     def _find_sub(self, root, candidates):
         for name in candidates:

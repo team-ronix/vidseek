@@ -1,6 +1,6 @@
 import torch
 
-def bbox_transform(anchors, gt):
+def bbox_trans(anchors, gt):
     wa = anchors[:,2] - anchors[:,0]
     ha = anchors[:,3] - anchors[:,1]
     xa = anchors[:,0] + .5*wa
@@ -15,7 +15,7 @@ def bbox_transform(anchors, gt):
     th = torch.log(h / (ha + 1e-8) + 1e-8)
     return torch.stack([tx, ty, tw, th], 1)
 
-def bbox_transform_inv(anchors, deltas):
+def bbox_trans_inv(anchors, deltas):
     wa = anchors[:,2] - anchors[:,0]
     ha = anchors[:,3] - anchors[:,1]
     xa = anchors[:,0] + .5*wa
@@ -32,8 +32,6 @@ def bbox_transform_inv(anchors, deltas):
 
 
 def iou_matrix(a, b):
-    # a: (N,4), b: (M,4) -> (N,M)
-    # compare each box in a to each box in b, return IoU
     ix1 = torch.max(a[:,0].unsqueeze(1), b[:,0].unsqueeze(0))
     iy1 = torch.max(a[:,1].unsqueeze(1), b[:,1].unsqueeze(0))
     ix2 = torch.min(a[:,2].unsqueeze(1), b[:,2].unsqueeze(0))

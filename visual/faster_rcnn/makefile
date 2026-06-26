@@ -7,7 +7,7 @@ ITER_COOL ?= 20000
 ITER_FT_WARM ?= 20000
 ITER_FT_COOL ?= 10000
 IMAGE_PATH ?= 
-MODEL_PATH ?= "voc_faster_rcnn_final.pth"
+MODEL_PATH ?= "faster_rcnn_final.pth"
 SCORE_THRESH ?= 0.5
 
 help:

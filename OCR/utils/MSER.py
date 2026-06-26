@@ -10,7 +10,6 @@ def merge_boxes(boxes, threshold=0.3):
 
         for i, (mx, my, mw, mh) in enumerate(merged):
 
-            # compute IoU
             xi1 = max(x, mx)
             yi1 = max(y, my)
             xi2 = min(x + w, mx + mw)
@@ -25,7 +24,6 @@ def merge_boxes(boxes, threshold=0.3):
             iou = inter / (union + 1e-6)
 
             if iou > threshold:
-                # merge boxes
                 nx = min(x, mx)
                 ny = min(y, my)
                 nw = max(x + w, mx + mw) - nx
@@ -78,9 +76,9 @@ def merge_char_words(boxes, x_thresh=20, y_thresh=10):
                 x1, y1, w1, h1 = boxes[j]
 
                 for wx, wy, ww, wh in word:
-                    # check same line
+
                     if abs(wy - y1) < y_thresh:
-                        # check horizontal gap
+
                         if abs((wx + ww) - x1) < x_thresh or abs((x1 + w1) - wx) < x_thresh:
                             word.append(boxes[j])
                             used[j] = True
@@ -108,7 +106,7 @@ def get_word_boxes(words):
 
 
 def sort_boxes_reading_order(boxes, y_thresh=10):
-    # first sort by y
+
     boxes = sorted(boxes, key=lambda b: b[1])
 
     lines = []
@@ -126,11 +124,11 @@ def sort_boxes_reading_order(boxes, y_thresh=10):
         if not placed:
             lines.append([box])
 
-    # sort each line by x
+
     for line in lines:
         line.sort(key=lambda b: b[0])
 
-    # flatten
+
     return [b for line in lines for b in line]
 
 def sort_word_chars(boxes): 

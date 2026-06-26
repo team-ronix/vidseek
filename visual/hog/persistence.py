@@ -27,7 +27,6 @@ def save(detector, path) -> None:
                 "calibration_file": calibration_file,
             })
             total_components += 1
-
     rescorer = getattr(detector, "contextual_rescorer", None)
     ctx_cfg: dict = {
         "fitted": False,
@@ -37,25 +36,19 @@ def save(detector, path) -> None:
         "svm_files": {},
         "neg_size": 30_000,
     }
-
     if rescorer is not None:
         ctx_cfg["fitted"] = bool(rescorer.fitted)
         ctx_cfg["iou_thresh"] = float(rescorer.iou_thresh)
         ctx_cfg["C"] = float(rescorer.C)
         ctx_cfg["detection_threshold"] = float(rescorer.detection_threshold)
         ctx_cfg["neg_size"] = int(rescorer.neg_size)
-
         if rescorer.fitted:
             for cls, svc in rescorer.rescorers.items():
                 safe = cls.replace(" ", "_")
                 ctx_file = f"ctx_{safe}.pkl"
                 joblib.dump(svc, path / ctx_file)
                 ctx_cfg["svm_files"][cls] = ctx_file
-            print(
-                f"  Contextual rescoring saved  "
-                f"({len(rescorer.rescorers)} class SVMs)"
-            )
-
+            print(f"  Contextual rescoring saved ({len(rescorer.rescorers)} class SVMs)")
     config = {
         "classes": list(detector.classes),
         "hog_params": dict(detector.hog_params),
@@ -74,11 +67,9 @@ def save(detector, path) -> None:
         "default_window_size": tuple(detector.default_window_size),
         "trained_flag": bool(detector.trained_flag),
         "components": components_cfg,
-        # Keyed by component_id so load() can match correctly even when some
-        # SVM files are absent on disk and list positions shift.
         "regressors": {
             cls: {
-                str(comp.id): comp.bbox_regressor.get_state()
+                str(comp.id): comp.bbox_reg.get_state()
                 for comp in detector.cls_comps[cls]
             }
             for cls in detector.classes
@@ -158,7 +149,7 @@ def load(detector, path) -> None:
         for comp_id_str, state in reg_states.get(cls, {}).items():
             comp_id = int(comp_id_str)
             if comp_id in id_to_comp:
-                id_to_comp[comp_id].bbox_regressor.set_state(state)
+                id_to_comp[comp_id].bbox_reg.set_state(state)
 
     ctx_cfg = cfg.get("contextual_rescoring", {})
     iou_thresh = float(ctx_cfg.get("iou_thresh", 0.5))

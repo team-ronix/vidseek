@@ -14,10 +14,10 @@ def set_lr(opt, lr):
         g['lr'] = lr
 
 def _latest_mid_ckpt(ckpt_prefix):
-    pattern = ckpt_prefix + '_mid_iter*.pth'
-    candidates = glob.glob(pattern)
+    pttn = ckpt_prefix + '_mid_iter*.pth'
+    cand = glob.glob(pttn)
     best_path, best_iter = None, 0
-    for p in candidates:
+    for p in cand:
         m = re.search(r'_mid_iter(\d+)\.pth$', p)
         if m:
             n = int(m.group(1))
@@ -26,9 +26,9 @@ def _latest_mid_ckpt(ckpt_prefix):
     return best_path, best_iter
 
 def clear_mid_ckpts(ckpt_prefix):
-    pattern = ckpt_prefix + '_mid_iter*.pth'
-    candidates = glob.glob(pattern)
-    for p in candidates:
+    pttn = ckpt_prefix + '_mid_iter*.pth'
+    cand = glob.glob(pttn)
+    for p in cand:
         os.remove(p)
         print(f' Deleted mid-ckpt {p}')
 
@@ -40,11 +40,11 @@ def train_rpn_iters(model, loader, device, n_iters, lr, step_name, ckpt_prefix=N
     if ckpt_prefix:
         mid_path, mid_iter = _latest_mid_ckpt(ckpt_prefix)
         if mid_path and mid_iter < n_iters:
-            print(f'Resuming {step_name} from mid-ckpt iter {mid_iter:,} ({mid_path})')
+            print(f'Resuming {step_name} from mid-ckpt iter {mid_iter} ({mid_path})')
             model.load_state_dict(torch.load(mid_path, map_location=device))
             start_iter = mid_iter
         elif mid_path and mid_iter >= n_iters:
-            print(f'Mid-ckpt at iter {mid_iter:,} already covers {n_iters:,} iters - skipping.')
+            print(f'Mid-ckpt at iter {mid_iter} already covers {n_iters} iters - skipping.')
             model.load_state_dict(torch.load(mid_path, map_location=device))
             return
 
@@ -85,11 +85,11 @@ def train_det_iters(model, rpn_src, loader, device, n_iters, lr, step_name, ckpt
     if ckpt_prefix:
         mid_path, mid_iter = _latest_mid_ckpt(ckpt_prefix)
         if mid_path and mid_iter < n_iters:
-            print(f'Resuming {step_name} from mid-ckpt iter {mid_iter:,} ({mid_path})')
+            print(f'Resuming {step_name} from mid-ckpt iter {mid_iter} ({mid_path})')
             model.load_state_dict(torch.load(mid_path, map_location=device))
             start_iter = mid_iter
         elif mid_path and mid_iter >= n_iters:
-            print(f'Mid-ckpt at iter {mid_iter:,} already covers {n_iters:,} iters - skipping.')
+            print(f'Mid-ckpt at iter {mid_iter} already covers {n_iters} iters - skipping.')
             model.load_state_dict(torch.load(mid_path, map_location=device))
             return
 

@@ -1,7 +1,6 @@
 import numpy as np
 import cv2
 
-IMG_SIZE = 128
 def calc_gradients(image):
     Gx = np.array([[-1, 0, 1]], dtype=np.float32)
     Gy = np.array([[-1], [0], [1]], dtype=np.float32)

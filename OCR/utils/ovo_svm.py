@@ -15,7 +15,7 @@ class BinarySVM:
         self.b = 0
 
     def fit(self, X, y):
-        # y in {-1, +1}
+
         n_samples, n_features = X.shape
         self.w = np.zeros(n_features)
         self.b = 0
@@ -29,7 +29,7 @@ class BinarySVM:
 
                 margin = yi * (np.dot(xi, self.w) + self.b)
 
-                # L2 regularization gradient (standard form)
+
                 if margin >= 1:
                     self.w -= self.lr * (self.w)
                 else:
