@@ -3,7 +3,8 @@ import os
 from typing import Dict, Optional
 
 EMBED_DIM = 50
-SEMANTIC_DIM = EMBED_DIM * 2    # subject + object
+# one for subject and one for object
+SEMANTIC_DIM = EMBED_DIM * 2
 
 class GloVeEmbedder:
     def __init__(
@@ -30,7 +31,7 @@ class GloVeEmbedder:
                 if vec.shape[0] == self._dim:
                     self._vectors[word] = vec
                     count += 1
-        print(f"[semantic] Loaded {count:,} word vectors (dim={self._dim})")
+        print(f"[semantic] Loaded {count} word vectors (dim={self._dim})")
 
     def _hash_embed(self, word: str) -> np.ndarray:
         rng = np.random.default_rng(abs(hash(word)) % (2**32))
@@ -45,7 +46,7 @@ class GloVeEmbedder:
             if tok in self._vectors:
                 vecs.append(self._vectors[tok])
             else:
-                # Try singular/plural heuristic
+                # try some variations of the token if it's not existed
                 for candidate in [tok + "s", tok[:-1], tok[:-2]]:
                     if candidate in self._vectors:
                         vecs.append(self._vectors[candidate])
@@ -85,7 +86,7 @@ class SemanticFeatureExtractor:
         self,
         query_subj: str,
         query_obj: str,
-        known_pairs: list,  # list of (subj_label, obj_label)
+        known_pairs: list,
         top_k: int = 5,
     ) -> list:
         q = self.extract(query_subj, query_obj)
