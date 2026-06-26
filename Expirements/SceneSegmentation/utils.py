@@ -39,7 +39,7 @@ def intersection(gt, pred):
     return max(min(gt[1], pred[1]) - max(gt[0], pred[0]), 0)
 
 def iou(gt, pred):
-    i = intersection(gt, pred)
+    i =intersection(gt, pred)
     return i / ((pred[1] - pred[0]) + (gt[1] - gt[0]) - i + 1e-32)
 
 def precision_interval(gt, pred):
@@ -51,7 +51,7 @@ def recall_interval(gt, pred):
 def f1_interval(gt, pred):
     p = precision_interval(gt, pred)
     r = recall_interval(gt, pred)
-    return 2 * p * r / (p + r)
+    return 2 * p * r / (p + r + 1e-32)
 
 
 def calculate_interval_metric(gt_data, pred_data, metric_name):

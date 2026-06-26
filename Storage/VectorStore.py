@@ -3,13 +3,12 @@ from dataclasses import dataclass
 @dataclass
 class VideoVector:
     id: str
-    embedding: list[float]
+    embedding:list[float]
     metadata: dict
 
 class VectorStore:
     def __init__(self):
         pass
-
     def storeVector(self, vector: VideoVector):
         raise NotImplementedError("This method should be implemented by subclasses.")
 
