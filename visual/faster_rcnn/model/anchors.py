@@ -27,9 +27,9 @@ class AnchorGenerator:
         return np.array(anchors, dtype=np.float32)
 
     def generate(self, feat_h, feat_w):
-        shift_x = np.arange(feat_w) * self.feat_stride + self.feat_stride // 2
-        shift_y = np.arange(feat_h) * self.feat_stride + self.feat_stride // 2
-        sx, sy = np.meshgrid(shift_x, shift_y)
+        sh_x= np.arange(feat_w) * self.feat_stride + self.feat_stride // 2
+        sh_y= np.arange(feat_h) * self.feat_stride + self.feat_stride // 2
+        sx, sy = np.meshgrid(sh_x,sh_y)
         shifts = np.stack([sx.ravel(), sy.ravel(), sx.ravel(), sy.ravel()], axis=1).astype(np.float32)
         all_anchors = shifts[:, None, :] + self.base_anchors[None, :, :]
         return torch.from_numpy(all_anchors.reshape(-1, 4))

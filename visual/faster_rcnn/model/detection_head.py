@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchvision.ops import roi_align
 from torchvision.models import vgg16 as _vgg16
 from visual.faster_rcnn.utils.box_utils import bbox_transform, iou_matrix
 
@@ -11,7 +12,6 @@ class RoIPool(nn.Module):
         self.spatial_scale = spatial_scale
 
     def forward(self, feat, rois):
-        assert feat.shape[0] == 1, "RoIPool only supports batch_size=1"
         N = rois.shape[0]
         C = feat.shape[1]
         out = torch.zeros(N, C, self.out_size, self.out_size, device=feat.device, dtype=feat.dtype)
@@ -27,11 +27,34 @@ class RoIPool(nn.Module):
             out[i] = F.adaptive_max_pool2d(roi_f.unsqueeze(0), self.out_size)[0]
         return out
 
+class RoIAlign(nn.Module):
+    def __init__(self, out_size=7, spatial_scale=1/16):
+        super().__init__()
+        self.out_size = out_size
+        self.spatial_scale = spatial_scale
+
+    def forward(self, feat, rois):
+        if rois.numel() == 0:
+            C = feat.shape[1]
+            return torch.zeros((0, C, self.out_size, self.out_size), device=feat.device, dtype=feat.dtype)
+        batch_idx = torch.zeros((rois.shape[0], 1), device=rois.device, dtype=rois.dtype)
+        boxes = torch.cat([batch_idx, rois], dim=1)
+        return roi_align(
+            feat,
+            boxes,
+            output_size=self.out_size,
+            spatial_scale=self.spatial_scale,
+            sampling_ratio=-1,
+            aligned=True,
+        )
+
+
+
 class DetectionHead(nn.Module):
     def __init__(
         self, num_classes, roi_size=7, in_ch=512, fc_dim=4096,
         batch=128, pos_frac=0.25, pos_iou=0.5,
-        neg_iou_hi=0.5, neg_iou_lo=0.1, lam=1.0, pretrained=True
+        neg_iou_hi=0.5, neg_iou_lo=0.1, lam=1.0, roi_op="align", pretrained=True
     ):
         super().__init__()
         self.num_classes = num_classes
@@ -42,7 +65,10 @@ class DetectionHead(nn.Module):
         self.neg_iou_lo = neg_iou_lo
         self.lam = lam
         self.pretrained = pretrained
-        self.roi = RoIPool(roi_size, 1/16)
+        if roi_op == "align":
+            self.roi = RoIAlign(roi_size, 1/16)
+        else:
+            self.roi = RoIPool(roi_size, 1/16)
         flat = in_ch * roi_size * roi_size
         self.fc6 = nn.Linear(flat, fc_dim)
         self.fc7 = nn.Linear(fc_dim, fc_dim)
