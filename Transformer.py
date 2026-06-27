@@ -13,7 +13,8 @@ if str(_TRANSFORMER_DIR) not in sys.path:
 from models.model.transformer import Transformer as TransformerModel  # type: ignore
 from data import _make_ids  # type: ignore
 
-_MODEL_DIR = _TRANSFORMER_DIR / "reuslt_AllNLI+specter"
+_VOCAB_PATH  = _TRANSFORMER_DIR / "results" / "allnli_specter" / "vocab.pkl"
+_MODEL_PATH  = _TRANSFORMER_DIR / "results" / "allnli_specter" / "best_model.pt"
 _DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 _MAX_LEN = 128
 
@@ -24,7 +25,7 @@ class Transformer:
         self.embeddings = []
         self.metadata = []
 
-        with open(_MODEL_DIR / "vocab.pkl", "rb") as vf:
+        with open(_VOCAB_PATH, "rb") as vf:
             self._vocab = pickle.load(vf)
 
         self._model = TransformerModel(
@@ -37,7 +38,7 @@ class Transformer:
             pooling="mean",
         ).to(_DEVICE)
         self._model.load_state_dict(
-            torch.load(_MODEL_DIR / "best_model.pt", map_location=_DEVICE)
+            torch.load(_MODEL_PATH, map_location=_DEVICE, weights_only=True)
         )
         self._model.eval()
 
