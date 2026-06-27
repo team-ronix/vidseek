@@ -13,7 +13,7 @@ _TRANSFORMER_DIR = Path(__file__).resolve().parents[1] / "Transformer"
 if str(_TRANSFORMER_DIR) not in sys.path:
     sys.path.insert(0, str(_TRANSFORMER_DIR))
 
-from models.model.transformer import Transformer
+from models import Transformer
 from data import _make_ids
 
 _MODEL_DIR = _TRANSFORMER_DIR / "results" / "allnli_specter"

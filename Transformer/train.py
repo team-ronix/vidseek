@@ -13,7 +13,7 @@ from configs.default import MODEL_CONFIG, DATA_CONFIG, TRAIN_DEFAULTS
 from data import build_vocab, get_pair_loader, get_sts_loaders
 from evaluate_search import evaluate
 from losses.mnr_loss import MultipleNegativesRankingLoss
-from models.model.transformer import Transformer
+from models import Transformer
 from utils import make_cosine_with_warmup, save_checkpoint, load_checkpoint, spearman_on_sts
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")

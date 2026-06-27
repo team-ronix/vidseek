@@ -10,7 +10,7 @@ _TRANSFORMER_DIR = Path(__file__).resolve().parent / "Transformer"
 if str(_TRANSFORMER_DIR) not in sys.path:
     sys.path.insert(0, str(_TRANSFORMER_DIR))
 
-from models.model.transformer import Transformer as TransformerModel  # type: ignore
+from models import Transformer as TransformerModel  # type: ignore
 from data import _make_ids  # type: ignore
 
 _VOCAB_PATH  = _TRANSFORMER_DIR / "results" / "allnli_specter" / "vocab.pkl"

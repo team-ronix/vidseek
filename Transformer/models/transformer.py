@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from models.model.encoder import Encoder
+from models.encoder import Encoder
 
 
 class Transformer(nn.Module):
@@ -14,10 +14,10 @@ class Transformer(nn.Module):
     def __init__(
         self,
         vocab_size: int,
-        d_model: int   = 256,
-        n_layers: int  = 4,
-        n_heads: int   = 8,
-        d_ff: int      = 512,
+        d_model: int   = 384,
+        n_layers: int  = 6,
+        n_heads: int   = 6,
+        d_ff: int      = 1536,
         max_len: int   = 512,
         dropout: float = 0.1,
         pooling: str   = "mean",   # "mean" or "max"

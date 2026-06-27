@@ -3,7 +3,7 @@ import torch.nn as nn
 
 class PositionWiseFeedForward(nn.Module):
     # Two-layer MLP applied to each token position independently.
-    # d_ff is usually 4x d_model (e.g. 384 → 1536 → 384).
+    # d_ff is the hidden layer size of the feed-forward network, usually 4x d_model (e.g. 384 -> 1536 -> 384).
 
     def __init__(self, d_model, d_ff, dropout=0.1):
         super().__init__()
