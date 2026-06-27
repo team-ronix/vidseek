@@ -368,7 +368,7 @@ cp .env.example .env   # then edit .env with your DB URL and API tokens
 make apply_migrate
 
 # 4. Train the Transformer 
-cd Transformer && poetry run python trainer.py && cd ..
+cd Transformer && poetry run python train.py && cd ..
 
 # 5. Ingest a video
 make run VIDEO_FILE=my_video.mp4
