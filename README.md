@@ -122,26 +122,62 @@ This runs all Alembic migrations (13 versions) to create the full schema: Videos
 
 These model weights are excluded from the repo via `.gitignore`. You must generate them before the pipeline can run.
 
-#### Custom Transformer embedder
+#### Custom Transformer Embedder
 
-The text embedding model (`Transformer/reuslt_AllNLI+specter/best_model.pt` and `vocab.pkl`) must be trained on AllNLI + STS data.
+The custom Transformer embedding model was trained using a combination of publicly available sentence embedding datasets.
 
-1. Download the training datasets:
-   - [AllNLI.csv](https://huggingface.co/datasets/sentence-transformers/all-nli) — place at `Transformer/data/AllNLI/AllNLI.csv`
-   - [STS Benchmark](https://huggingface.co/datasets/sentence-transformers/stsb) — place validation and test CSVs at `Transformer/data/sts-222/stsb_validation.csv` and `Transformer/data/sts-222/stsb_test.csv`
+**Training Dataset**
 
-2. Run the 3-phase training (MNR pretraining → evaluation → triplet fine-tuning):
+The training dataset was created by merging the following datasets:
 
-```bash
-cd Transformer
-poetry run python train.py
+- **AllNLI**
+  https://huggingface.co/datasets/sentence-transformers/embedding-training-data/blob/main/AllNLI.jsonl.gz
+
+- **SPECTER Training Triples**
+  https://huggingface.co/datasets/sentence-transformers/embedding-training-data/blob/main/specter_train_triples.jsonl.gz
+
+Both datasets were originally provided in **JSONL** format and were converted to **CSV** before being merged into a single training dataset.
+
+The final training dataset contains the following columns:
+
+- `anchor`
+- `positive`
+- `negative`
+
+---
+
+**Evaluation & Testing Dataset**
+
+Model evaluation is performed using the **STS Benchmark** dataset:
+
+https://huggingface.co/datasets/sentence-transformers/stsb
+
+To increase the size of the evaluation data, additional sentence pairs from the STS training split were added to the validation and test sets, resulting in approximately **100,000 samples** for each split.
+
+> **Note:** The additional samples were used only to enlarge the evaluation and testing datasets and were not used for training the Transformer model.
+
+---
+
+#### Hybrid Embedder
+
+The Hybrid Embedder is trained using the **MS MARCO Passage Ranking** dataset.
+
+Official dataset:
+
+https://microsoft.github.io/msmarco/
+
+The Hybrid Embedder combines:
+
+- **BM25** for sparse lexical matching.
+- **LSA (TF-IDF + Randomized SVD)** for dense semantic representations.
+
+After training, the fitted model is saved under:
+
+```text
+HybridEmbedder/models/
 ```
 
-Training requires a CUDA GPU and takes several hours. The output files `best_model.pt` and `vocab.pkl` will be written to the `reuslt_AllNLI+specter/` directory.
-
-#### Hybrid Embedder models
-
-The BM25+LSA hybrid embedder saves its fitted model under `hybrid_embedder/models/`. It is fitted automatically the first time the pipeline processes a video, so no separate training step is needed — just run the pipeline at least once.
+and is automatically loaded by the retrieval pipeline for indexing and search.
 
 ---
 
@@ -239,8 +275,8 @@ cp .env.example .env   # then edit .env with your DB URL and API tokens
 # 3. Set up database
 make apply_migrate
 
-# 4. Train the Transformer (or skip if you have best_model.pt)
-cd Transformer && poetry run python train.py && cd ..
+# 4. Train the Transformer 
+cd Transformer && poetry run python trainer.py && cd ..
 
 # 5. Ingest a video
 make run VIDEO_FILE=my_video.mp4
