@@ -1,6 +1,6 @@
 # VidSeek
 
-VidSeek is a multimodal video search engine that lets you query video content using natural language. It ingests videos through a multi-stage pipeline — extracting text via OCR, speech via automatic speech recognition, objects via computer vision, and visual relationships between objects — then indexes everything into a searchable vector store backed by PostgreSQL. A React frontend and FastAPI backend expose the full search and upload experience.
+VidSeek is a multimodal video search engine that lets you query video content using natural language. It ingests videos through a multi-stage pipeline - extracting text via OCR, speech via automatic speech recognition, objects via computer vision, and visual relationships between objects - then indexes everything into a searchable vector store backed by PostgreSQL. A React frontend and FastAPI backend expose the full search and upload experience.
 
 ---
 
@@ -97,7 +97,7 @@ Edit `.env`:
 # PostgreSQL connection string
 DATABASE_URL=postgresql+psycopg2://<user>:<password>@<host>:<port>/<dbname>?sslmode=require
 
-# HuggingFace token — needed to download Whisper and other models
+# HuggingFace token - needed to download Whisper and other models
 HF_TOKEN=hf_...
 
 ```
@@ -108,11 +108,11 @@ HF_TOKEN=hf_...
 
 ## Database Setup
 
-### Option A — Hosted PostgreSQL (recommended for quick start)
+### Option A - Hosted PostgreSQL (recommended for quick start)
 
 Use any hosted PostgreSQL service (Aiven, Supabase, Neon, Railway). Paste the connection string into `DATABASE_URL`.
 
-### Option B — Local PostgreSQL
+### Option B - Local PostgreSQL
 
 ```bash
 # Create the database
@@ -134,7 +134,7 @@ This runs all Alembic migrations (13 versions) to create the full schema: Videos
 
 ## Model & Data Files
 
-The trained model weights are **not** included in the repo (excluded via `.gitignore`). Download them before running the pipeline — or retrain using the datasets listed at the end of this section.
+The trained model weights are **not** included in the repo (excluded via `.gitignore`). Download them before running the pipeline - or retrain using the datasets listed at the end of this section.
 
 All of our own trained models live in a single Google Drive folder, organized to mirror the project's directory layout (`Transformer`, `hybrid_embedder`, `visual`, `OCR`):
 
@@ -166,28 +166,28 @@ Download each item from the source below and place it at the matching project pa
 
 Trained on a merge of publicly available sentence-embedding datasets:
 
-- **AllNLI** — https://huggingface.co/datasets/sentence-transformers/embedding-training-data/blob/main/AllNLI.jsonl.gz
-- **SPECTER Training Triples** — https://huggingface.co/datasets/sentence-transformers/embedding-training-data/blob/main/specter_train_triples.jsonl.gz
+- **AllNLI** - https://huggingface.co/datasets/sentence-transformers/embedding-training-data/blob/main/AllNLI.jsonl.gz
+- **SPECTER Training Triples** - https://huggingface.co/datasets/sentence-transformers/embedding-training-data/blob/main/specter_train_triples.jsonl.gz
 
 Both were originally in **JSONL** format, converted to **CSV**, and merged into a single dataset with the columns `anchor`, `positive`, `negative`.
 
 Evaluation uses the **STS Benchmark** (https://huggingface.co/datasets/sentence-transformers/stsb). Additional pairs from the STS training split were added to the validation and test sets, resulting in approximately **100,000 samples** per split.
 
-> **Note:** The additional samples were used only to enlarge the evaluation and testing datasets — they were never used to train the Transformer model.
+> **Note:** The additional samples were used only to enlarge the evaluation and testing datasets - they were never used to train the Transformer model.
 
 #### Hybrid Embedder
 
 Trained on the **MS MARCO Passage Ranking** dataset (https://microsoft.github.io/msmarco/). It combines:
 
-- **BM25** — sparse lexical matching
-- **LSA (TF-IDF + Randomized SVD)** — dense semantic representations
+- **BM25** - sparse lexical matching
+- **LSA (TF-IDF + Randomized SVD)** - dense semantic representations
 
 The fitted model is saved under `hybrid_embedder/models/` and is loaded automatically by the retrieval pipeline for indexing and search.
 
 #### OCR models (training provenance)
 
-- **CRAFT** text detector — trained on the SynthText dataset (Kaggle).
-- **HoG** character recognizer — trained locally on the Char74K dataset.
+- **CRAFT** text detector - trained on the SynthText dataset (Kaggle).
+- **HoG** character recognizer - trained locally on the Char74K dataset.
 
 > Training datasets for the vision detectors (Faster R-CNN, HOG, VRD) are listed under [Run Vision Models Separately](#run-vision-models-separately).
 
