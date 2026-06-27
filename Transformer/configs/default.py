@@ -1,5 +1,5 @@
 # shared defaults so every training script uses the same model architecture
-# and data paths without copy-pasting constants everywhere
+# and data paths 
 
 MODEL_CONFIG = {
     "d_model":  384,    # embedding dimension

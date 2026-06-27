@@ -9,7 +9,7 @@ import pandas as pd
 
 
 class Vocabulary:
-    # maps words ↔ integer ids
+    # maps words <-> integer ids
     # special tokens: PAD=0, UNK=1, CLS=2, SEP=3
     PAD_TOKEN = "<pad>"
     UNK_TOKEN = "<unk>"
@@ -52,7 +52,7 @@ class Vocabulary:
                 self.idx2word[idx] = word
 
     def encode(self, sentence: str):
-        # convert sentence → list of token ids, unknown words → UNK id
+        # convert sentence → list of token ids, unknown words -> UNK id
         tokens = self.tokenize(sentence)
         if not tokens:
             return [self.word2idx[self.UNK_TOKEN]]
@@ -65,7 +65,7 @@ class Vocabulary:
 #  helpers 
 
 def _make_ids(sentence: str, vocab: Vocabulary, max_len: int) -> list:
-    # encode a sentence and wrap with [CLS] ... [SEP], truncated to max_len
+    # encode a sentence and wrap with [CLS] . .  [SEP], truncated to max_len
     cls_id = vocab.word2idx[vocab.CLS_TOKEN]
     sep_id = vocab.word2idx[vocab.SEP_TOKEN]
     body   = vocab.encode(sentence)[: max_len - 2]
@@ -101,7 +101,7 @@ class PairDataset(Dataset):
 
 class STSDataset(Dataset):
     # Sentence pairs with similarity scores for evaluation.
-    # Normalizes scores from [0,5] or [0,1] → [-1,1] to match cosine similarity range.
+    # Normalizes scores from [0,5] or [0,1] -> [-1,1] to match cosine similarity range.
 
     def __init__(self, path: str, vocab: Vocabulary, max_len: int = 128):
         encode = lambda s: _make_ids(str(s) if pd.notna(s) else "", vocab, max_len)
@@ -112,8 +112,8 @@ class STSDataset(Dataset):
             ids_b = encode(row["sentence2"])
             score = float(row["score"]) if pd.notna(row["score"]) else 0.0
             if score > 1.0:
-                score = score / 5.0       # [0, 5] → [0, 1]
-            score = score * 2.0 - 1.0    # [0, 1] → [-1, 1]
+                score = score / 5.0       # [0, 5] -> [0, 1]
+            score = score * 2.0 - 1.0    # [0, 1] -> [-1, 1]
             self.pairs.append((ids_a, ids_b, score))
 
     def __len__(self):
@@ -131,14 +131,14 @@ class STSDataset(Dataset):
 #  collate functions 
 
 def collate_pair(batch):
-    # AllNLIDataset (pair) → (ids_a, ids_b, mask_a, mask_b)
+    # AllNLIDataset (pair) -> (ids_a, ids_b, mask_a, mask_b)
     seqs_a, seqs_b = zip(*batch)
     padded, masks = _pad_and_mask(seqs_a, seqs_b)
     return (*padded, *masks)
 
 
 def collate_sts(batch):
-    # STSDataset → (ids_a, ids_b, mask_a, mask_b, scores)
+    # STSDataset -> (ids_a, ids_b, mask_a, mask_b, scores)
     seqs_a, seqs_b, scores = zip(*batch)
     padded, masks = _pad_and_mask(seqs_a, seqs_b)
     return (*padded, *masks, torch.stack(scores))
@@ -164,7 +164,7 @@ def get_pair_loader(
     num_workers: int = 0,
     pin_memory: bool = False,
 ) -> DataLoader:
-    # DataLoader for MNR training — (anchor, positive) pairs
+    # DataLoader for MNR training - (anchor, positive) pairs
     return DataLoader(
         PairDataset(path, vocab, max_len),
         batch_size=batch_size, shuffle=True,

@@ -5,7 +5,7 @@ import torch.nn as nn
 
 class ScaleDotProductAttention(nn.Module):
     # Scaled dot-product attention: softmax(QK^T / sqrt(d_k)) * V
-    # Dividing by sqrt(d_k) keeps scores from exploding and saturating softmax.
+    # Dividing by sqrt(d_k) keeps attention scores from becoming too large and prevents softmax saturation.
 
     def __init__(self, dropout: float = 0.0):
         super().__init__()
@@ -13,6 +13,7 @@ class ScaleDotProductAttention(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, q, k, v, mask=None):
+        # d_k = embedding dimension of each Query/Key vector in one attention head
         d_k = q.size(-1)
         scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(d_k)
 

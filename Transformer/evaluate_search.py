@@ -9,7 +9,7 @@ from data import Vocabulary
 
 
 def _normalize_scores(scores: pd.Series) -> pd.Series:
-    # STS scores can be [0,5] or [0,1] — normalize to [-1,1] to match cosine similarity
+    # STS scores can be [0,5] or [0,1] - normalize to [-1,1] to match cosine similarity
     scores_01 = scores.apply(lambda s: float(s) / 5.0 if float(s) > 1.0 else float(s))
     return scores_01 * 2.0 - 1.0
 
@@ -56,7 +56,7 @@ def recall_at_k(query_embs, corpus_embs, query_ids, relevant_ids, k=10, chunk=64
 
 
 def mean_reciprocal_rank(query_embs, corpus_embs, query_ids, relevant_ids, chunk=64):
-    # average 1/rank across all queries — MRR=1.0 means the answer is always ranked first
+    # average 1/rank across all queries - MRR=1.0 means the answer is always ranked first
     mrr = 0.0
     for sim, rel_chunk in _sim_chunks(query_embs, corpus_embs, query_ids, relevant_ids, chunk):
         sorted_idx = sim.argsort(dim=-1, descending=True)
