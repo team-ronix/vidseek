@@ -41,7 +41,7 @@ class Encoder(nn.Module):
         )
 
     def forward(self, x, src_mask=None):
-        # x: (batch, seq_len) token ids → (batch, seq_len, d_model) contextual vectors
+        # x: (batch, seq_len) token ids -> (batch, seq_len, d_model) contextual vectors
         x = self.embedding(x)
         for layer in self.layers:
             x = layer(x, src_mask)

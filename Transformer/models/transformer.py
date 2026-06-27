@@ -9,7 +9,7 @@ from models.encoder import Encoder
 
 class Transformer(nn.Module):
     # Encoder-only transformer for sentence embeddings.
-    # Encodes a token sequence → mean/max pool → L2 normalize → sentence vector.
+    # Encodes a token sequence -> mean/max pool -> L2 normalize -> sentence vector.
 
     def __init__(
         self,

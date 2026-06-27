@@ -52,7 +52,7 @@ class Vocabulary:
                 self.idx2word[idx] = word
 
     def encode(self, sentence: str):
-        # convert sentence → list of token ids, unknown words -> UNK id
+        # convert sentence -> list of token ids, unknown words -> UNK id
         tokens = self.tokenize(sentence)
         if not tokens:
             return [self.word2idx[self.UNK_TOKEN]]

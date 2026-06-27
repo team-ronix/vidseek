@@ -35,7 +35,7 @@ export function ResultCard({ result, index }) {
           {start && (
             <span className="card-loc-item card-timestamp">
               <Clock size={12} />
-              <span>{start}{end ? ` → ${end}` : ''}</span>
+              <span>{start}{end ? ` -> ${end}` : ''}</span>
             </span>
           )}
         </div>

@@ -194,6 +194,26 @@ and is automatically loaded by the retrieval pipeline for indexing and search.
 - CRAFT model was trained on SynthText dataset on kaggle
 - HoG model was trained locally on Char74K dataset
 
+#### HOG model
+
+- The generated model (as a folder) can be found in this drive (https://drive.google.com/drive/folders/1GAu6hPLEjHTu5US-5kLkhyDcQSWjvKD6?usp=sharing)
+at the path `visual/hog/model` on drive.
+- That model should be downloaded at put as a folder at project path `visual/hog`.
+
+### Faster R-CNN model
+
+- The trained weights `faster_rcnn_final.pth` can be downloaded using that [link](https://huggingface.co/OmarMoh11/faster-RCNN/resolve/main/experiments/model_10/faster_rcnn_final.pth)
+- That weights should be put at project path `visual/faster_rcnn`
+
+### Visual Relationship Detection
+
+- The generated model (as a folder) can be found in this drive (https://drive.google.com/drive/folders/1GAu6hPLEjHTu5US-5kLkhyDcQSWjvKD6?usp=sharing)
+at the path `visual/vrd_ml/checkpoint` on drive.
+- That model should be downloaded at put as a folder at project path `visual/vrd_ml`.
+- The needed word embedding existed on [NLP Stanford](https://nlp.stanford.edu/projects/glove/). Download `glove.2024.wikigiga.50d.zip` and extract it at project path `visual/vrd_ml`.
+
+
+
 ---
 
 ## Pipeline Phases
@@ -206,8 +226,8 @@ The pipeline stages run in order:
 4. Visual relationship detection
 5. ASR transcription (Whisper)
 6. Sentence segmentation
-7. Embedding via custom Transformer → HNSW index
-8. Embedding via Hybrid Embedder → HNSW index
+7. Embedding via custom Transformer -> HNSW index
+8. Embedding via Hybrid Embedder -> HNSW index
 
 ---
 
@@ -216,6 +236,9 @@ The pipeline stages run in order:
 These sections let you train or run each visual model independently from the full ingestion pipeline.
 
 ### 1) Faster R-CNN (folder: `visual/faster_rcnn`)
+
+That model is trained on the PASCAL VOC 2007 dataset available at 
+[PASCAL VOC 2007](https://www.robots.ox.ac.uk/~vgg/projects/pascal/VOC/voc2007/index.html).  
 
 Files:
 
@@ -237,13 +260,10 @@ cd visual/faster_rcnn
 make infer IMAGE_PATH=./sample.jpg MODEL_PATH=./faster_rcnn_final.pth SCORE_THRESH=0.5
 ```
 
-Or run directly from project root:
-
-```bash
-poetry run python visual/faster_rcnn/inference.py --image-path ./sample.jpg --model-path visual/faster_rcnn/faster_rcnn_final.pth --score-thresh 0.5
-```
-
 ### 2) HOG Detector (folder: `visual/hog`)
+
+That model is trained on the PASCAL VOC 2007 dataset available at 
+[PASCAL VOC 2007](https://www.robots.ox.ac.uk/~vgg/projects/pascal/VOC/voc2007/index.html). 
 
 Files:
 
@@ -279,13 +299,10 @@ cd visual/hog
 make infer-json DETECT_CONFIG=./config/detect.json
 ```
 
-Or run direct inference command from project root:
-
-```bash
-poetry run python visual/hog/infer.py --model-dir visual/hog/model --image ./sample.jpg --threshold 0.3 --nms-thresh 0.3 --output ./result.jpg
-```
-
 ### 3) VRD Model (folder: `visual/vrd_ml`)
+
+That model is trained on Stanford VRD dataset available at 
+[Stanford Dataset](https://cs.stanford.edu/people/ranjaykrishna/vrd/). 
 
 Files:
 
