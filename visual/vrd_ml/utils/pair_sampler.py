@@ -1,9 +1,7 @@
-from typing import List, Tuple, Optional
 import numpy as np
-from visual.vrd_ml.vrd_dataset import DetectedObject, RelationshipTriplet
 
 
-def _pair_distance(subj: DetectedObject, obj: DetectedObject) -> float:
+def _pair_distance(subj, obj):
     sx = (subj.bbox.x1 + subj.bbox.x2) / 2.0
     sy = (subj.bbox.y1 + subj.bbox.y2) / 2.0
     ox = (obj.bbox.x1 + obj.bbox.x2) / 2.0
@@ -12,81 +10,61 @@ def _pair_distance(subj: DetectedObject, obj: DetectedObject) -> float:
 
 
 def enumerate_pairs(
-    objects: List[DetectedObject],
-    min_score: float = 0.0,
-    max_pairs: Optional[int] = None,
-    exclude_same: bool = True,
-    min_iou: float = 0.0,
-    require_overlap: bool = False,
-    verbose: bool = False,
-) -> List[Tuple[DetectedObject, DetectedObject]]:
-    # filter by minimum confidence
+    objects,
+    min_score=0.0,
+    max_pairs=None,
+    exclude_same=True,
+    min_iou=0.0,
+    require_overlap=False,
+    verbose=False,
+):
     filtered = [o for o in objects if o.score >= min_score]
-    pairs: List[Tuple[DetectedObject, DetectedObject]] = []
+    pairs = []
     for i, subj in enumerate(filtered):
         for j, obj in enumerate(filtered):
-            if exclude_same and i == j:
+            if exclude_same == True and i == j:
                 continue
             iou = subj.bbox.iou(obj.bbox)
-            if require_overlap and iou == 0.0:
+            if require_overlap == True and iou == 0.0:
                 continue
             if iou < min_iou:
                 continue
             pairs.append((subj, obj))
-
-    # always sort by combined detection score descending - meaningful
-    # whenever scores actually vary, harmless (stable) when they don't.
     pairs.sort(key=lambda p: -(p[0].score * p[1].score))
-
     if max_pairs is None or len(pairs) <= max_pairs:
         return pairs
-
     scores = [o.score for o in filtered]
     scores_are_uniform = bool(scores) and (max(scores) - min(scores)) < 1e-9
-
-    if scores_are_uniform:
-        if verbose:
+    if scores_are_uniform == True:
+        if verbose == True:
             print(
-                f"[pair_sampler] all {len(filtered)} object scores are "
-                f"identical ({scores[0] if scores else 'n/a'}) - score-based "
-                f"ranking carries no information here. Falling back to "
-                f"spatial-proximity ranking before truncating "
-                f"{len(pairs)} candidate pairs down to max_pairs={max_pairs}. "
-                f"If these are ground-truth boxes, consider max_pairs=None "
-                f"to evaluate every pair instead."
+                f"[pair_sampler] All object scores are identical. Using spatial ranking "
+                f"to reduce {len(pairs)} pairs to {max_pairs}."
             )
         pairs.sort(key=lambda p: _pair_distance(p[0], p[1]))
-
     return pairs[:max_pairs]
 
 
-def _obj_key(o: DetectedObject) -> Tuple:
+def _obj_key(o):
     return (o.label, o.bbox.x1, o.bbox.y1, o.bbox.x2, o.bbox.y2)
 
 
 def sample_training_pairs(
-    objects: List[DetectedObject],
-    gt_relations: list[RelationshipTriplet],
-    neg_ratio: float = 3.0,
-    rng: Optional[np.random.Generator] = None,
-) -> Tuple[List[Tuple[DetectedObject, DetectedObject]], List[int]]:
+    objects,
+    gt_relations,
+    neg_ratio=3.0,
+    rng=None,
+):
     if rng is None:
         rng = np.random.default_rng()
-
-    # build positive set
-    pos_pairs: List[Tuple[DetectedObject, DetectedObject]] = []
-    pos_labels: List[int] = []
-
-    # use stable (label, x1, y1, x2, y2) key instead of id() so that
-    # deduplication is correct even when DetectedObject instances are rebuilt.
+    pos_pairs = []
+    pos_labels = []
     gt_set = set()
     for rel in gt_relations:
         pos_pairs.append((rel.subject, rel.object_))
         pos_labels.append(rel.predicate_idx)
         gt_set.add((_obj_key(rel.subject), _obj_key(rel.object_)))
-
-    # build negative pool - all pairs not in gt_set
-    neg_pool: List[Tuple[DetectedObject, DetectedObject]] = []
+    neg_pool = []
     for i, subj in enumerate(objects):
         for j, obj in enumerate(objects):
             if i == j:
@@ -94,8 +72,6 @@ def sample_training_pairs(
             if (_obj_key(subj), _obj_key(obj)) in gt_set:
                 continue
             neg_pool.append((subj, obj))
-
-    # sample negatives
     n_neg = min(int(len(pos_pairs) * neg_ratio), len(neg_pool))
     if n_neg > 0 and neg_pool:
         indices = rng.choice(len(neg_pool), size=n_neg, replace=False)
@@ -104,7 +80,6 @@ def sample_training_pairs(
     else:
         neg_pairs = []
         neg_labels = []
-
     all_pairs = pos_pairs + neg_pairs
     all_labels = pos_labels + neg_labels
     return all_pairs, all_labels

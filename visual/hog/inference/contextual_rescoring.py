@@ -8,17 +8,11 @@ from visual.hog.datastructures.voc_dataset import VOCDataset
 from visual.hog.utils import calculate_iou
 
 
-def _context_vector(scores: dict[str, float], classes: list[str]) -> np.ndarray:
+def _context_vector(scores, classes):
     return np.array([scores.get(cls, 0.0) for cls in classes])
 
 
-def _build_feature(
-    score: float,
-    box: tuple[int, int, int, int],
-    img_w: int,
-    img_h: int,
-    ctx: np.ndarray,
-) -> np.ndarray:
+def _build_feature(score, box, img_w, img_h, ctx):
     x1, y1, x2, y2 = box
     geo = np.array([
         score,
@@ -31,21 +25,14 @@ def _build_feature(
 
 
 class ContextualRescorer:
-    def __init__(
-        self,
-        classes: list[str],
-        iou_thresh: float = 0.5,
-        C: float = 1.0,
-        detection_threshold: float = 0.5,
-        neg_size: int = 30_000,
-    ):
+    def __init__(self, classes, iou_thresh=0.5, C=1.0, detection_threshold=0.5, neg_size=30000):
         self.classes = classes
         self.iou_thresh = iou_thresh
         self.C = C
         self.detection_threshold = detection_threshold
         self.neg_size = neg_size
-        self.rescorers: dict[str, SVC] = {}
-        self.fitted: bool = False
+        self.rescorers = {}
+        self.fitted = False
 
     def _save_checkpoint(self, checkpoint_path, X_pos, X_neg, next_neg_order, last_idx):
         tmp_path = f"{checkpoint_path}.tmp"
@@ -63,19 +50,12 @@ class ContextualRescorer:
             ckpt = pickle.load(f)
         return ckpt['X_pos'], ckpt['X_neg'], ckpt['next_neg_order'], ckpt['last_idx']
 
-    def fit(
-        self,
-        detector,
-        dataset: VOCDataset,
-        max_images: int | None = None,
-        checkpoint_path: str | None = None,
-        checkpoint_every: int = 50,
-    ) -> None:
+    def fit(self, detector, dataset, max_images=None, checkpoint_path=None, checkpoint_every=50):
         print("\nContextual Rescoring - collecting training features")
         n = len(dataset) if max_images is None else min(len(dataset), max_images)
         start_idx = 0
-        X_pos: dict[str, list[np.ndarray]] = {cls: [] for cls in self.classes}
-        X_neg: dict[str, list[tuple[float, int, np.ndarray]]] = {cls: [] for cls in self.classes}
+        X_pos = {cls: [] for cls in self.classes}
+        X_neg = {cls: [] for cls in self.classes}
         next_neg_order = 0
         if checkpoint_path and os.path.exists(checkpoint_path):
             X_pos, X_neg, next_neg_order, last_idx = self._load_checkpoint(checkpoint_path)
@@ -88,7 +68,7 @@ class ContextualRescorer:
             print(f"[Checkpoint] Resuming from image index {start_idx} (loaded from {checkpoint_path})")
         neg_order_val = next_neg_order
 
-        def _next_neg_order() -> int:
+        def _next_neg_order():
             nonlocal neg_order_val
             v = neg_order_val
             neg_order_val += 1
@@ -114,7 +94,7 @@ class ContextualRescorer:
                     use_context=False,
                 )
                 if detected_boxes:
-                    best_per_class: dict[str, float] = {}
+                    best_per_class = {}
                     for box, score, label in zip(detected_boxes, detected_scores, detected_labels):
                         if label not in best_per_class or score > best_per_class[label]:
                             best_per_class[label] = score
@@ -122,11 +102,10 @@ class ContextualRescorer:
                     for box, score, label in zip(detected_boxes, detected_scores, detected_labels):
                         g = _build_feature(score, box, iw, ih, ctx)
                         is_tp = any(
-                            gt_label == label
-                            and calculate_iou(box, gt_box) > self.iou_thresh
+                            gt_label == label and calculate_iou(box, gt_box) > self.iou_thresh
                             for gt_box, gt_label in zip(gt_boxes, gt_lbls)
                         )
-                        if is_tp:
+                        if is_tp == True:
                             X_pos[label].append(g)
                         else:
                             if len(X_neg[label]) < self.neg_size:
@@ -161,27 +140,17 @@ class ContextualRescorer:
             svm.fit(X_cls, y_cls)
             self.rescorers[cls] = svm
             n_tp = int((y_cls == 1).sum())
-            print(
-                f"[{cls}]: {len(X_cls)} detections  "
-                f"({n_tp} TP / {len(X_cls) - n_tp} FP)"
-            )
+            print(f"[{cls}]: {len(X_cls)} detections  ({n_tp} TP / {len(X_cls) - n_tp} FP)")
         self.fitted = True
         print("Contextual Rescoring - training complete.\n")
         if checkpoint_path and os.path.exists(checkpoint_path):
             os.remove(checkpoint_path)
             print(f"[Checkpoint] Training complete - removed {checkpoint_path}")
 
-    def rescore(
-        self,
-        boxes: list,
-        scrs: list[float],
-        lbls: list[str],
-        img_w: int,
-        img_h: int,
-    ) -> list[float]:
+    def rescore(self, boxes, scrs, lbls, img_w, img_h):
         if not self.fitted or not boxes:
             return scrs
-        best_per_class: dict[str, float] = {}
+        best_per_class = {}
         for sc, lbl in zip(scrs, lbls):
             if lbl not in best_per_class or sc > best_per_class[lbl]:
                 best_per_class[lbl] = sc

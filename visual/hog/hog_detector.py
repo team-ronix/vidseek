@@ -23,22 +23,22 @@ class HOGDetector:
         self,
         classes,
         hog_descriptor_params,
-        n_components: int = 2,
-        c_svm: float = 0.01,
-        max_itr_svm: int = 30_000,
-        training_epochs: int = 2,
-        area_percentile: float = 80,
-        hard_neg_threshold: float = -1,
-        pyramid_step: int = 2,
-        max_hard_per_image: int = 20,
-        bg_multiplier: float = 2.0,
-        other_classes_total_ratio: float = 1.0,
-        bbr_alpha: float = 1000.0,
-        min_iou_between_gt_and_latent: float = 0.35,
-        contextual_rescorer_iou_thresh: float = 0.5,
-        contextual_rescorer_C: float = 1.0,
-        contextual_rescorer_detection_threshold: float = 0.05,
-        contextual_rescorer_neg_size: int = 30_000,
+        n_components=2,
+        c_svm=0.01,
+        max_itr_svm=30000,
+        training_epochs=2,
+        area_percentile=80,
+        hard_neg_threshold=-1,
+        pyramid_step=2,
+        max_hard_per_image=20,
+        bg_multiplier=2.0,
+        other_classes_total_ratio=1.0,
+        bbr_alpha=1000.0,
+        min_iou_between_gt_and_latent=0.35,
+        contextual_rescorer_iou_thresh=0.5,
+        contextual_rescorer_C=1.0,
+        contextual_rescorer_detection_threshold=0.05,
+        contextual_rescorer_neg_size=30000,
     ):
         self.classes = classes
         self.hog_params = hog_descriptor_params
@@ -56,10 +56,10 @@ class HOGDetector:
         self.min_iou_between_gt_and_latent = min_iou_between_gt_and_latent
         self.default_window_size = (64, 64)
         self.hog_descriptor = HOGDescriptor(**self.hog_params)
-        self.cls_comps: dict[str, list[Component]] = {cls: [] for cls in self.classes}
-        self.svms: dict[str, list[LinearSVC]] = {cls: [] for cls in self.classes}
-        self.kmeans_clfs: dict[str, KMeans | None] = {cls: None for cls in self.classes}
-        self.trained_flag: bool = False
+        self.cls_comps = {cls: [] for cls in self.classes}
+        self.svms = {cls: [] for cls in self.classes}
+        self.kmeans_clfs = {cls: None for cls in self.classes}
+        self.trained_flag = False
         self.contextual_rescorer = ContextualRescorer(
             classes=self.classes,
             iou_thresh=contextual_rescorer_iou_thresh,
@@ -68,27 +68,25 @@ class HOGDetector:
             neg_size=contextual_rescorer_neg_size,
         )
 
-
-    def _extract_custom_hog(self, image_patch) -> np.ndarray:
+    def _extract_custom_hog(self, image_patch):
         return self.hog_descriptor.compute_feature_map(image_patch).flatten()
 
-    def _calculate_iou(self, boxA, boxB) -> float:
+    def _calculate_iou(self, boxA, boxB):
         return calculate_iou(boxA, boxB)
-
 
     def train(
         self,
-        train_ds: VOCDataset,
-        min_box_area: int = 400,
-        max_train_images: int | None = None,
-        max_rescore_images: int | None= None,
-        neg_patches_per_image: int = 2,
-        checkpoint_path: str | Path = './checkpoint',
-        skip_step1: bool = False,
-        rescorer_checkpoint_every: int = 50,
-    ) -> None:
+        train_ds,
+        min_box_area=400,
+        max_train_images=None,
+        max_rescore_images=None,
+        neg_patches_per_image=2,
+        checkpoint_path='./checkpoint',
+        skip_step1=False,
+        rescorer_checkpoint_every=50,
+    ):
         checkpoint_path = Path(checkpoint_path)
-        skip_step1 &= checkpoint_path.exists()
+        skip_step1 = skip_step1 and checkpoint_path.exists()
         if not skip_step1:
             t1 = time.time()
             print("\nStep 1: Initialisation\n")
@@ -164,7 +162,7 @@ class HOGDetector:
         self.contextual_rescorer.fit(
             self,
             train_ds,
-            max_rescore_images if max_rescore_images is not None else max_train_images,
+            max_rescore_images if max_rescore_images != None else max_train_images,
             checkpoint_path=str(rescorer_checkpoint_path),
             checkpoint_every=rescorer_checkpoint_every,
         )
@@ -174,31 +172,25 @@ class HOGDetector:
         print(f"\nTraining complete - {len(trained)}/{len(self.classes)} classes, {self.n_components} components each.")
         # shutil.rmtree(checkpoint_path)
 
-    def detect(
-        self,
-        image,
-        threshold=None,
-        overlap_threshold: float = 0.3,
-        pyramid_lambda=None,
-        use_context: bool = True,
-    ):
+    def detect(self, image, threshold=None, overlap_threshold=0.3, pyramid_lambda=None, use_context=True):
         boxes, scores, labels = detect(self, image, overlap_threshold, pyramid_lambda)
-        if use_context and self.contextual_rescorer.fitted and boxes:
+        if use_context == True and self.contextual_rescorer.fitted == True and boxes:
             ih, iw = image.shape[:2]
             scores = self.contextual_rescorer.rescore(boxes, scores, labels, iw, ih)
             order = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
-            boxes = [boxes[i]for i in order]
+            boxes = [boxes[i] for i in order]
             scores = [scores[i] for i in order]
             labels = [labels[i] for i in order]
-        threshold = 0 if threshold is None else threshold
+        if threshold is None:
+            threshold = 0
         keep_indices = np.where(np.array(scores) >= threshold)[0]
         boxes = [boxes[i] for i in keep_indices]
         scores = [scores[i] for i in keep_indices]
         labels = [labels[i] for i in keep_indices]
         return boxes, scores, labels
 
-    def save(self, path) -> None:
+    def save(self, path):
         save(self, path)
 
-    def load(self, path) -> None:
+    def load(self, path):
         load(self, path)

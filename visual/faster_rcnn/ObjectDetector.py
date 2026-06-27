@@ -48,7 +48,7 @@ class ObjectDetector:
         scaled_H, scaled_W = processed_frame.shape[1], processed_frame.shape[2]
         with torch.no_grad():
             res = self.model(processed_frame.unsqueeze(0).to(self.device), [(scaled_H, scaled_W)])[0]
-        pred_boxes  = res['boxes'].cpu()
+        pred_boxes = res['boxes'].cpu()
         pred_scores = res['scores'].cpu()
         pred_labels = res['labels'].cpu()
         print(f'\nDetections ({len(pred_scores)} found):')
@@ -94,15 +94,14 @@ class ObjectDetector:
                     'model_name': 'Faster R-CNN'
                 })
         return objects
-            
 
     def save_inverted_index(self, output_path='object_inverted_index.json'):
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(self.inverted_index, f, indent=2, ensure_ascii=False)
-            
+
     def load_inverted_index(self, input_path='object_inverted_index.json'):
         with open(input_path, 'r', encoding='utf-8') as f:
             self.inverted_index = json.load(f)
-            
+
     def get_inverted_index(self):
         return self.inverted_index

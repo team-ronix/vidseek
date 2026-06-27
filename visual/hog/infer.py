@@ -6,10 +6,11 @@ import cv2
 import numpy as np
 from visual.hog.hog_detector import HOGDetector
 
+# color palette for drawing boxes - one color per class
 colors = [
-    (214, 39, 40), (255, 127, 14), ( 44, 160, 44), ( 31, 119, 180),
+    (214, 39, 40), (255, 127, 14), (44, 160, 44), (31, 119, 180),
     (148, 103, 189), (140, 86, 75), (227, 119, 194), (127, 127, 127),
-    ( 23, 190, 207), (188, 189, 34), (174, 199, 232), (255, 187, 120),
+    (23, 190, 207), (188, 189, 34), (174, 199, 232), (255, 187, 120),
     (152, 223, 138), (255, 152, 150), (197, 176, 213), (196, 156, 148),
     (247, 182, 210), (199, 199, 199), (219, 219, 141), (158, 218, 229),
 ]
@@ -28,25 +29,23 @@ def draw_detections(image: np.ndarray, boxes, scores, labels, class_list: list) 
         text = f"{lbl}: {score:.2f}"
         (tw, th), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
         cv2.rectangle(out, (x0, y0 - th - baseline - 4), (x0 + tw + 4, y0), color, -1)
-        cv2.putText(out, text, (x0 + 2, y0 - baseline - 2),cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
+        cv2.putText(out, text, (x0 + 2, y0 - baseline - 2), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
     return out
 
 
-def _load_config(config_path: str | None) -> dict:
+# load config json if provided
+def _load_config(config_path):
     if not config_path:
         return {}
-
     config_file = Path(config_path)
     if not config_file.exists():
         sys.exit(f"Error: config file not found: {config_file}")
-
     with config_file.open("r", encoding="utf-8") as f:
         config = json.load(f)
-
     if not isinstance(config, dict):
         sys.exit(f"Error: config file must contain a JSON object: {config_file}")
-
     return config
+
 
 def parse_args():
     pre = argparse.ArgumentParser(add_help=False)
@@ -84,12 +83,16 @@ def parse_args():
 
 def main():
     args = parse_args()
+
     image_path = Path(args.image)
     if not image_path.exists():
         sys.exit(f"Error: image not found: {image_path}")
+
     model_dir = Path(args.model_dir)
     if not model_dir.exists():
         sys.exit(f"Error: model directory not found: {model_dir}")
+
+    # create detector and load model
     detector = HOGDetector(
         classes=[],
         hog_descriptor_params=dict(
@@ -105,14 +108,16 @@ def main():
     image = cv2.imread(str(image_path))
     if image is None:
         sys.exit(f"Error: could not read image: {image_path}")
+
     print(f"\nImage: {image_path} ({image.shape[1]}x{image.shape[0]})")
+
     use_context = not args.no_context
     boxes, scores, labels = detector.detect(
         image,
-        threshold = args.threshold,
-        overlap_threshold = args.nms_thresh,
-        pyramid_lambda = args.pyramid_lambda,
-        use_context = use_context,
+        threshold=args.threshold,
+        overlap_threshold=args.nms_thresh,
+        pyramid_lambda=args.pyramid_lambda,
+        use_context=use_context,
     )
     if args.json:
         results = [
@@ -134,6 +139,7 @@ def main():
         annotated = draw_detections(image, boxes, scores, labels, detector.classes)
         cv2.imwrite(args.output, annotated)
         print(f"\nAnnotated image saved -> {args.output}")
+
     return boxes, scores, labels
 
 

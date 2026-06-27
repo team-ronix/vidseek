@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-from typing import List, Tuple, Optional, Dict
 import json
 import os
 import warnings
@@ -13,39 +12,39 @@ class BBox:
     y2: float
 
     @property
-    def width(self) -> float:
+    def width(self):
         return self.x2 - self.x1
 
     @property
-    def height(self) -> float:
+    def height(self):
         return self.y2 - self.y1
 
     @property
-    def area(self) -> float:
+    def area(self):
         return max(0.0, self.width) * max(0.0, self.height)
 
     @property
-    def center(self) -> Tuple[float, float]:
+    def center(self):
         return ((self.x1 + self.x2) / 2, (self.y1 + self.y2) / 2)
 
-    def to_array(self) -> np.ndarray:
+    def to_array(self):
         return np.array([self.x1, self.y1, self.x2, self.y2], dtype=np.float32)
 
     @classmethod
-    def from_array(cls, arr) -> "BBox":
+    def from_array(cls, arr):
         return cls(float(arr[0]), float(arr[1]), float(arr[2]), float(arr[3]))
 
     @classmethod
-    def from_yxyx(cls, y1, y2, x1, x2) -> "BBox":
+    def from_yxyx(cls, y1, y2, x1, x2):
         return cls(float(x1), float(y1), float(x2), float(y2))
 
-    def union(self, other: "BBox") -> "BBox":
+    def union(self, other):
         return BBox(
             min(self.x1, other.x1), min(self.y1, other.y1),
             max(self.x2, other.x2), max(self.y2, other.y2),
         )
 
-    def iou(self, other: "BBox") -> float:
+    def iou(self, other):
         ix1 = max(self.x1, other.x1)
         iy1 = max(self.y1, other.y1)
         ix2 = min(self.x2, other.x2)
@@ -71,43 +70,42 @@ class RelationshipTriplet:
     object_: DetectedObject
     score: float = 1.0
 
-    def __str__(self) -> str:
+    def __str__(self):
         return f"({self.subject.label}, {self.predicate}, {self.object_.label})"
 
 
 @dataclass
 class ImageAnnotation:
     image_id: str
-    image_path: Optional[str]
+    image_path: object  # can be None
     image_width: int
     image_height: int
-    objects: List[DetectedObject]
-    relationships: List[RelationshipTriplet]
+    objects: list
+    relationships: list
 
 
 class VRDDataset:
     def __init__(
         self,
-        annotation_path: Optional[str] = None,
-        object_classes: Optional[List[str]] = None,
-        predicate_classes: Optional[List[str]] = None,
+        annotation_path=None,
+        object_classes=None,
+        predicate_classes=None,
     ):
-        _pred = predicate_classes if predicate_classes is not None else []
-        _obj = object_classes if object_classes is not None else []
-        self.predicate_classes: List[str] = _pred
-        self.object_classes: List[str] = _obj
-        self._pred2idx: Dict[str, int] = {c: i for i, c in enumerate(_pred)}
-        self._idx2pred: Dict[int, str] = {i: c for c, i in self._pred2idx.items()}
-        self._obj2idx: Dict[str, int] = {c: i for i, c in enumerate(_obj)}
-        self.annotations: Dict[str, ImageAnnotation] = {}
-        if annotation_path:
+        _pred = predicate_classes if predicate_classes != None else []
+        _obj = object_classes if object_classes != None else []
+        self.predicate_classes = _pred
+        self.object_classes = _obj
+        self._pred2idx = {c: i for i, c in enumerate(_pred)}
+        self._idx2pred = {i: c for c, i in self._pred2idx.items()}
+        self._obj2idx = {c: i for i, c in enumerate(_obj)}
+        self.annotations = {}
+        if annotation_path != None:
             self._load(annotation_path)
 
-    def _load(self, path: str):
+    def _load(self, path):
         with open(path) as f:
             raw = json.load(f)
-
-        unknown_preds: Dict[str, int] = {}
+        unknown_preds = {}
         for img_id, ann in raw.items():
             objects = [
                 DetectedObject(
@@ -125,6 +123,7 @@ class VRDDataset:
                 pred = rel["predicate"]
                 pred_idx = self._pred2idx.get(pred, -1)
                 if pred_idx < 0:
+                    # this predicate is not in our vocabulary
                     unknown_preds[pred] = unknown_preds.get(pred, 0) + 1
                 relationships.append(RelationshipTriplet(
                     subject=subj,
@@ -143,17 +142,9 @@ class VRDDataset:
         if unknown_preds:
             total = sum(unknown_preds.values())
             names = sorted(unknown_preds, key=lambda k: -unknown_preds[k])
-            warnings.warn(
-                f"[VRDDataset] {total} relationships use predicates absent from the "
-                f"supplied vocab and will be ignored during training (predicate_idx=-1).\n"
-                f"  Unknown predicates ({len(names)}): {names[:20]}"
-                + (" ..." if len(names) > 20 else "") + "\n"
-                f"  Pass a wider predicate_classes list to VRDDataset to capture them.",
-                UserWarning,
-                stacklevel=2,
-            )
+            print(f"[VRDDataset] Ignoring {total} relationships with unknown predicates ({len(names)} unique).")
 
-    def add(self, annotation: ImageAnnotation):
+    def add(self, annotation):
         self.annotations[annotation.image_id] = annotation
 
     def __len__(self):
@@ -162,14 +153,14 @@ class VRDDataset:
     def __iter__(self):
         return iter(self.annotations.values())
 
-    def get_all_relationships(self) -> List[RelationshipTriplet]:
+    def get_all_relationships(self):
         rels = []
         for ann in self.annotations.values():
             rels.extend(ann.relationships)
         return rels
 
-    def predicate_distribution(self) -> Dict[str, int]:
-        dist: Dict[str, int] = {}
+    def predicate_distribution(self):
+        dist = {}
         for rel in self.get_all_relationships():
             dist[rel.predicate] = dist.get(rel.predicate, 0) + 1
         return dict(sorted(dist.items(), key=lambda x: -x[1]))

@@ -1,17 +1,16 @@
 from collections import defaultdict
-from typing import Dict, List, Optional, Tuple
 from visual.vrd_ml.features.semantic import SemanticFeatureExtractor
 
 
 class LanguagePrior:
     def __init__(
         self,
-        predicate_classes: List[str],
-        glove_path: Optional[str] = None,
-        smoothing: float = 1.0,
-        min_pair_count: int = 2,
-        zero_shot_top_k: int = 5,
-        zero_shot_min_sim: float = 0.5,
+        predicate_classes,
+        glove_path=None,
+        smoothing=1.0,
+        min_pair_count=2,
+        zero_shot_top_k=5,
+        zero_shot_min_sim=0.5,
     ):
         self.predicate_classes = predicate_classes
         self.n_pred = max(len(predicate_classes), 1)
@@ -20,22 +19,19 @@ class LanguagePrior:
         self.zero_shot_top_k = zero_shot_top_k
         self.zero_shot_min_sim = zero_shot_min_sim
         self.glove_path = glove_path
-
-        self.pair_counts: Dict[Tuple[str, str], Dict[str, int]] = defaultdict(lambda: defaultdict(int))
-        self.subj_counts: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
-        self.obj_counts: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
-        self.global_counts: Dict[str, int] = defaultdict(int)
-        self.pair_totals: Dict[Tuple[str, str], int] = defaultdict(int)
-        self.subj_totals: Dict[str, int] = defaultdict(int)
-        self.obj_totals: Dict[str, int] = defaultdict(int)
-        self.global_total: int = 0
-
-        self._known_pairs: List[Tuple[str, str]] = []
+        self.pair_counts = defaultdict(lambda: defaultdict(int))
+        self.subj_counts = defaultdict(lambda: defaultdict(int))
+        self.obj_counts = defaultdict(lambda: defaultdict(int))
+        self.global_counts = defaultdict(int)
+        self.pair_totals = defaultdict(int)
+        self.subj_totals = defaultdict(int)
+        self.obj_totals = defaultdict(int)
+        self.global_total = 0
+        self._known_pairs = []
         self._is_fitted = False
         self._semantic = SemanticFeatureExtractor(glove_path=glove_path)
 
-
-    def fit(self, dataset) -> "LanguagePrior":
+    def fit(self, dataset):
         for ann in dataset:
             for rel in ann.relationships:
                 s, p, o = rel.subject.label, rel.predicate, rel.object_.label
@@ -52,14 +48,17 @@ class LanguagePrior:
         return self
 
 
-    def score(self, subj_label: str, obj_label: str, predicate: str) -> float:
-        if not self._is_fitted:
+    def score(self, subj_label, obj_label, predicate):
+        if self._is_fitted != True:
+
             return 1.0
         key = (subj_label, obj_label)
         pair_total = self.pair_totals.get(key, 0)
+        # if we've seen this pair enough times, use pair-level statistics
         if pair_total >= self.min_pair_count:
             count = self.pair_counts[key].get(predicate, 0)
             return self._smoothed(count, pair_total)
+        # otherwise use subject/object marginals
         s_total = self.subj_totals.get(subj_label, 0)
         o_total = self.obj_totals.get(obj_label, 0)
         if s_total > 0 or o_total > 0:
@@ -71,25 +70,26 @@ class LanguagePrior:
             if pair_total > 0:
                 probs.append(self._smoothed(self.pair_counts[key].get(predicate, 0), pair_total))
             return sum(probs) / len(probs)
-
+        # zero-shot: find similar known pairs and use their statistics
         neighbor_prob = self._zero_shot_score(subj_label, obj_label, predicate)
-        if neighbor_prob is not None:
+        if neighbor_prob != None:
             return neighbor_prob
-
         return self._smoothed(self.global_counts.get(predicate, 0), self.global_total)
 
-    def _smoothed(self, count: int, total: int) -> float:
+    def _smoothed(self, count, total):
         return (count + self.smoothing) / (total + self.smoothing * self.n_pred)
 
-    def _zero_shot_score(self, subj_label: str, obj_label: str, predicate: str) -> Optional[float]:
+    def _zero_shot_score(self, subj_label, obj_label, predicate):
         if not self._known_pairs:
             return None
         neighbors = self._semantic.zero_shot_nearest(
             subj_label, obj_label, self._known_pairs, top_k=self.zero_shot_top_k
         )
+        # only use neighbors with enough similarity
         neighbors = [(pair, sim) for pair, sim in neighbors if sim >= self.zero_shot_min_sim]
         if not neighbors:
             return None
+        # weighted average of neighbor probabilities
         weighted_count, weight_total = 0.0, 0.0
         for (s, o), sim in neighbors:
             total = self.pair_totals[(s, o)]
@@ -100,12 +100,10 @@ class LanguagePrior:
             weight_total += sim
         if weight_total == 0:
             return None
-
         raw = weighted_count / weight_total
         return max(raw, 1.0 / (self.n_pred * 10))
 
-
-    def state_dict(self) -> dict:
+    def state_dict(self):
         return {
             "predicate_classes": self.predicate_classes,
             "smoothing": self.smoothing,
@@ -124,7 +122,7 @@ class LanguagePrior:
         }
 
     @classmethod
-    def from_state_dict(cls, state: dict, glove_path: Optional[str] = None) -> "LanguagePrior":
+    def from_state_dict(cls, state, glove_path=None):
         obj = cls(
             predicate_classes=state["predicate_classes"],
             glove_path=glove_path,

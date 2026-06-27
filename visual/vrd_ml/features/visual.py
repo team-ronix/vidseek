@@ -18,14 +18,11 @@ _hog_feat = hog(
     channel_axis=-1, feature_vector=True,
 )
 HOG_DIM = _hog_feat.shape[0]
+# one for subject and one for object and one for union region
 VISUAL_DIM = HOG_DIM * 3
 
 
-def _safe_crop(
-    image: np.ndarray,
-    bbox: BBox,
-    pad: int = 2,
-) -> np.ndarray:
+def _safe_crop(image, bbox, pad=2):
     H, W = image.shape[:2]
     x1 = max(0, int(bbox.x1) - pad)
     y1 = max(0, int(bbox.y1) - pad)
@@ -37,21 +34,17 @@ def _safe_crop(
     return cv2.resize(crop, CROP_SIZE, interpolation=cv2.INTER_LINEAR)
 
 
-def _hog_features(crop: np.ndarray) -> np.ndarray:
+def _hog_features(crop):
     img = Image.fromarray(crop).convert("L")
     mag, orient = calc_gradients(np.array(img))
     feat = HoG(orient, mag, cell_size=HOG_PIXELS, num_bins=HOG_ORIENT, block_size=HOG_CELLS)
     return feat.astype(np.float32)
 
-class VisualFeatureExtractor:
-    dim: int = VISUAL_DIM
 
-    def extract(
-        self,
-        image: np.ndarray,
-        subj_box: BBox,
-        obj_box: BBox,
-    ) -> np.ndarray:
+class VisualFeatureExtractor:
+    dim = VISUAL_DIM
+
+    def extract(self, image, subj_box, obj_box):
         union_box = subj_box.union(obj_box)
         subj_crop = _safe_crop(image, subj_box)
         obj_crop = _safe_crop(image, obj_box)
@@ -63,9 +56,5 @@ class VisualFeatureExtractor:
         ]).astype(np.float32)
         return feat
 
-    def extract_batch(
-        self,
-        image: np.ndarray,
-        pairs: list,  # list of (BBox, BBox)
-    ) -> np.ndarray:
+    def extract_batch(self, image, pairs):
         return np.stack([self.extract(image, s, o) for s, o in pairs], axis=0)

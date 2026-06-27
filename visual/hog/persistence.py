@@ -28,21 +28,21 @@ def save(detector, path) -> None:
             })
             total_components += 1
     rescorer = getattr(detector, "contextual_rescorer", None)
-    ctx_cfg: dict = {
+    ctx_cfg = {
         "fitted": False,
         "iou_thresh": 0.5,
         "C": 1.0,
         "detection_threshold": 0.5,
         "svm_files": {},
-        "neg_size": 30_000,
+        "neg_size": 30000,
     }
-    if rescorer is not None:
+    if rescorer != None:
         ctx_cfg["fitted"] = bool(rescorer.fitted)
         ctx_cfg["iou_thresh"] = float(rescorer.iou_thresh)
         ctx_cfg["C"] = float(rescorer.C)
         ctx_cfg["detection_threshold"] = float(rescorer.detection_threshold)
         ctx_cfg["neg_size"] = int(rescorer.neg_size)
-        if rescorer.fitted:
+        if rescorer.fitted == True:
             for cls, svc in rescorer.rescorers.items():
                 safe = cls.replace(" ", "_")
                 ctx_file = f"ctx_{safe}.pkl"
@@ -77,23 +77,20 @@ def save(detector, path) -> None:
         "contextual_rescoring": ctx_cfg,
     }
     np.save(path / "config.npy", config, allow_pickle=True)
-    print(
-        f"Model saved to '{path}/' ({len(detector.classes)} classes, {total_components} components)"
-    )
+    print(f"Model saved to '{path}/' ({len(detector.classes)} classes, {total_components} components)")
 
 
-def load(detector, path) -> None:
+def load(detector, path):
     path = Path(path)
     if not path.exists() or not path.is_dir():
         print(f"Invalid path: {path}")
         return
-
     cfg = np.load(path / "config.npy", allow_pickle=True).item()
     detector.classes = list(cfg["classes"])
     detector.hog_params = dict(cfg["hog_params"])
     detector.n_components = int(cfg.get("n_components", 1))
     detector.c_svm = float(cfg.get("c_svm", 0.01))
-    detector.max_itr_svm = int(cfg.get("max_itr_svm", 30_000))
+    detector.max_itr_svm = int(cfg.get("max_itr_svm", 30000))
     detector.training_epochs = int(cfg.get("training_epochs", 1))
     detector.area_percentile = float(cfg.get("area_percentile", 80))
     detector.hard_neg_threshold = float(cfg.get("hard_neg_threshold", -1))
@@ -104,7 +101,6 @@ def load(detector, path) -> None:
     detector.bbr_alpha = float(cfg.get("bbr_alpha", 1000.0))
     detector.min_iou_between_gt_and_latent = float(cfg.get("min_iou_between_gt_and_latent", 0.5))
     detector.default_window_size = tuple(cfg.get("default_window_size", (64, 64)))
-    
     detector.hog_descriptor = HOGDescriptor(**detector.hog_params)
     detector.cls_comps = {cls: [] for cls in detector.classes}
     detector.svms = {cls: [] for cls in detector.classes}
@@ -130,9 +126,10 @@ def load(detector, path) -> None:
                 alpha=detector.bbr_alpha,
             )
             comp.svm = joblib.load(svm_path)
-            comp.cal = (
-                joblib.load(calibration_path) if calibration_path.exists() else None
-            )
+            if calibration_path.exists():
+                comp.cal = joblib.load(calibration_path)
+            else:
+                comp.cal = None
 
             detector.cls_comps[cls].append(comp)
             loaded_components += 1
@@ -141,8 +138,6 @@ def load(detector, path) -> None:
         detector.svms[cls] = [comp.svm for comp in detector.cls_comps[cls]]
 
     detector.trained_flag = bool(cfg.get("trained_flag", loaded_components > 0))
-
-    # match regressor states by component_id
     reg_states = cfg.get("regressors", {})
     for cls in detector.classes:
         id_to_comp = {comp.id: comp for comp in detector.cls_comps[cls]}
@@ -157,7 +152,7 @@ def load(detector, path) -> None:
     detection_threshold = float(ctx_cfg.get("detection_threshold", 0.5))
     fitted = bool(ctx_cfg.get("fitted", False))
     svm_files = dict(ctx_cfg.get("svm_files", {}))
-    neg_size = int(ctx_cfg.get("neg_size", 30_000))
+    neg_size = int(ctx_cfg.get("neg_size", 30000))
     rescorer = ContextualRescorer(
         classes=detector.classes,
         iou_thresh=iou_thresh,
@@ -166,7 +161,7 @@ def load(detector, path) -> None:
         neg_size=neg_size,
     )
 
-    if fitted and svm_files:
+    if fitted == True and svm_files:
         loaded_ctx = 0
         missing_ctx = []
         for cls, filename in svm_files.items():
@@ -177,23 +172,15 @@ def load(detector, path) -> None:
             else:
                 missing_ctx.append(cls)
 
-        if missing_ctx:
-            print(
-                f"  Warning: contextual rescoring SVM files missing for: "
-                f"{missing_ctx}.  Rescorer marked as unfitted."
-            )
+        if len(missing_ctx) > 0:
+            print(f"  Warning: contextual rescoring SVM files missing for: {missing_ctx}.  Rescorer marked as unfitted.")
             rescorer.fitted = False
         else:
             rescorer.fitted = True
             print(f"  Contextual rescoring loaded ({loaded_ctx} class SVMs)")
     else:
         rescorer.fitted = False
-        if fitted and not svm_files:
-            print(
-                "  Warning: config marks contextual rescoring as fitted but "
-                "no SVM files were recorded.  Rescorer left unfitted."
-            )
+        if fitted == True and not svm_files:
+            print("  Warning: config marks contextual rescoring as fitted but no SVM files were recorded.  Rescorer left unfitted.")
     detector.contextual_rescorer = rescorer
-    print(
-        f"Model loaded from '{path}/' ({len(detector.classes)} classes, {loaded_components} components)"
-    )
+    print(f"Model loaded from '{path}/' ({len(detector.classes)} classes, {loaded_components} components)")
