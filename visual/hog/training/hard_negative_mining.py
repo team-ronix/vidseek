@@ -7,18 +7,12 @@ from tqdm import tqdm
 from visual.hog.datastructures.voc_dataset import VOCDataset
 from collections import defaultdict
 
-def _gt_overlap_mask(
-    feat_map_shape,
-    ch: int,
-    cw: int,
-    cell: float,
-    scale: float,
-    gt_boxes_for_class: list,
-    min_iou: float,
-) -> np.ndarray:
+
+def _gt_overlap_mask(feat_map_shape, ch, cw, cell, scale, gt_boxes_for_class, min_iou):
     H_cells, W_cells, _ = feat_map_shape
     n_y = H_cells - ch + 1
     n_x = W_cells - cw + 1
+    # compute window positions in image space
     y_idx = np.arange(n_y, dtype=np.float32)
     x_idx = np.arange(n_x, dtype=np.float32)
     win_x0 = (x_idx * cell * scale)[np.newaxis, :]
@@ -41,15 +35,7 @@ def _gt_overlap_mask(
     return overlap
 
 
-def _score_windows_chunked(
-    feat_map: np.ndarray,
-    valid_ys: np.ndarray,
-    valid_xs: np.ndarray,
-    comp,
-    ch: int,
-    cw: int,
-    chunk_size: int = 2048,
-) -> np.ndarray:
+def _score_windows_chunked(feat_map, valid_ys, valid_xs, comp, ch, cw, chunk_size=2048):
     _, _, feat_depth = feat_map.shape
     feat_dim = ch * cw * feat_depth
     n_valid = valid_ys.size
@@ -66,43 +52,30 @@ def _score_windows_chunked(
     return scrs
 
 
-def _extract_feats_at_indices(
-    feat_map: np.ndarray,
-    ys: np.ndarray,
-    xs: np.ndarray,
-    ch: int,
-    cw: int,
-) -> np.ndarray:
+def _extract_feats_at_indices(feat_map, ys, xs, ch, cw):
     _, _, feat_depth = feat_map.shape
     win_views = sliding_window_view(feat_map, (ch, cw, feat_depth))[:, :, 0]
-    feats = win_views[ys, xs].reshape(
-        len(ys), ch * cw * feat_depth).astype(np.float32)
+    feats = win_views[ys, xs].reshape(len(ys), ch * cw * feat_depth).astype(np.float32)
     del win_views
     return feats
 
 
-def flush_initial_negatives(detector) -> None:
+def flush_initial_negatives(detector):
     n_flushed = 0
     for comps in detector.cls_comps.values():
         for comp in comps:
             n_flushed += comp.X_bg.shape[0]
             comp.X_bg = np.array([])
-    print(f"flush_initial_negatives: cleared {n_flushed} pre-SVM random "
-          f"negatives from cache (epoch 1 cache reset).")
+    print(f"flush_initial_negatives: cleared {n_flushed} pre-SVM random negatives from cache (epoch 1 cache reset).")
 
 
-def clear_easy_negatives(detector) -> None:
+def clear_easy_negatives(detector):
     for cls in detector.classes:
         for comp in detector.cls_comps[cls]:
             comp.clear_easy_negatives(detector.hard_neg_threshold)
 
 
-def mine_hard_negatives_background(
-    detector,
-    dataset: VOCDataset,
-    max_images: int | None = None,
-    score_chunk_size: int = 2048,
-) -> None:
+def mine_hard_negatives_background(detector, dataset, max_images=None, score_chunk_size=2048):
     print("  -> Mining hard background negatives")
     n = len(dataset) if max_images is None else min(len(dataset), max_images)
     indices = np.random.permutation(n)
@@ -123,9 +96,7 @@ def mine_hard_negatives_background(
         p = detector.hog_descriptor.compute_feature_pyramid(img)
         del img
         for cls, comps in detector.cls_comps.items():
-            gt_boxes_cls = [
-                box for box, lbl in zip(boxes, lbls) if lbl == cls
-            ]
+            gt_boxes_cls = [box for box, lbl in zip(boxes, lbls) if lbl == cls]
             for comp in comps:
                 n_pos = comp.X_pos.shape[0]
                 n_bg_target = int(n_pos * detector.bg_multiplier)
@@ -134,7 +105,7 @@ def mine_hard_negatives_background(
                     continue
                 take_at_most = min(n_needed, detector.max_hard_per_image)
                 ch, cw = comp.cell_h, comp.cell_w
-                candidates: list[tuple[float, int, int, int, int]] = []
+                candidates = []
                 candidate_seq = 0
                 for level_idx, level in enumerate(p):
                     feat_map = level.feature_map
@@ -142,6 +113,7 @@ def mine_hard_negatives_background(
                     scale = level.scale
                     if H_cells < ch or W_cells < cw:
                         continue
+                    # compute which windows overlap with gt boxes to ignore these
                     if gt_boxes_cls:
                         gt_overlap = _gt_overlap_mask(
                             feat_map.shape, ch, cw, cell, scale,
@@ -155,10 +127,7 @@ def mine_hard_negatives_background(
                     del gt_overlap
                     if valid_ys.size == 0:
                         continue
-                    scrs = _score_windows_chunked(
-                        feat_map, valid_ys, valid_xs, comp, ch, cw,
-                        chunk_size=score_chunk_size,
-                    )
+                    scrs = _score_windows_chunked(feat_map, valid_ys, valid_xs, comp, ch, cw, chunk_size=score_chunk_size)
                     hard_mask = scrs > detector.hard_neg_threshold
                     if not hard_mask.any():
                         del scrs, valid_ys, valid_xs
@@ -178,11 +147,13 @@ def mine_hard_negatives_background(
                     del hard_scores, hard_ys, hard_xs
                 if not candidates:
                     continue
-                by_level: dict[int, list[tuple[int, int, int]]] = defaultdict(list)
+
+                # group candidates by pyramid level for efficient feature extraction
+                by_level = defaultdict(list)
                 for sc, seq, level_idx, iy, ix in candidates:
                     by_level[level_idx].append((sc, iy, ix))
                 del candidates
-                new_feats: list[np.ndarray] = []
+                new_feats = []
                 for level_idx, items in by_level.items():
                     feat_map = p[level_idx].feature_map
                     ys_arr = np.array([it[1] for it in items], dtype=np.intp)
@@ -207,10 +178,7 @@ def mine_hard_negatives_background(
             print(f"{comp.cls_name}-{comp.id}: {comp.X_bg.shape[0]} hard bg negatives")
 
 
-def resample_other_class_positives(
-    detector,
-    pos_patches: dict[str, list[np.ndarray]],
-) -> None:
+def resample_other_class_positives(detector, pos_patches):
     n_other_classes = len(detector.classes) - 1
     per_class_other_ratio = (detector.other_classes_total_ratio / max(1, n_other_classes))
     for cls in detector.classes:
@@ -225,35 +193,28 @@ def resample_other_class_positives(
                 n_sample = min(len(other_patches), n_other_per_cls)
                 if n_sample == 0:
                     continue
-                indices = np.random.choice(
-                    len(other_patches), size=n_sample, replace=False)
+                indices = np.random.choice(len(other_patches), size=n_sample, replace=False)
                 for i in indices:
                     resized = cv2.resize(other_patches[i], (comp.pixel_w, comp.pixel_h))
                     feat = detector._extract_custom_hog(resized)
-                    if (comp.svm.decision_function(feat.reshape(1, -1))[0] > detector.hard_neg_threshold):
+                    if comp.svm.decision_function(feat.reshape(1, -1))[0] > detector.hard_neg_threshold:
                         other_feats.append(feat)
                         tot_resam += 1
                     del resized, feat
-            comp.X_pos_other_classes = (np.array(other_feats) if other_feats else np.array([]))
+            if other_feats:
+                comp.X_pos_other_classes = np.array(other_feats)
+            else:
+                comp.X_pos_other_classes = np.array([])
+
             print(f" Refreshed other-class positives: '{cls}' comp {comp.id} - {tot_resam} samples retained.")
 
 
-def mine_hard_negatives_pyramid(
-    detector,
-    train_ds: VOCDataset,
-    max_images: int | None,
-    pos_patches: dict[str, list[np.ndarray]],
-    score_chunk_size: int = 2048,
-    do_flush_initial: bool = False,
-) -> None:
-    if do_flush_initial:
+def mine_hard_negatives_pyramid(detector, train_ds, max_images, pos_patches, score_chunk_size=2048, do_flush_initial=False):
+    if do_flush_initial == True:
         flush_initial_negatives(detector)
     else:
         clear_easy_negatives(detector)
-    mine_hard_negatives_background(
-        detector, train_ds, max_images,
-        score_chunk_size=score_chunk_size,
-    )
+    mine_hard_negatives_background(detector, train_ds, max_images, score_chunk_size=score_chunk_size)
     resample_other_class_positives(detector, pos_patches)
     for cls, comps in detector.cls_comps.items():
         for comp in comps:

@@ -16,12 +16,12 @@ if str(_TRANSFORMER_DIR) not in sys.path:
 from models.model.transformer import Transformer
 from data import _make_ids
 
-_MODEL_DIR = _TRANSFORMER_DIR / "reuslt_AllNLI+specter"
+_MODEL_DIR = _TRANSFORMER_DIR / "results" / "allnli_specter"
 _DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 _MAX_LEN = 128
 
 
-# ── helpers ───────────────────────────────────────────────────────────────────
+#  helpers 
 
 def _smooth(signal: np.ndarray, sigma: float) -> np.ndarray:
     radius = max(1, int(3.0 * sigma))
@@ -61,7 +61,7 @@ def _tfidf_title(texts: List[str], n: int) -> str:
     try:
         from sklearn.feature_extraction.text import TfidfVectorizer
         vec = TfidfVectorizer(stop_words="english", max_features=500,
-                              ngram_range=(1, 2), sublinear_tf=True)
+                            ngram_range=(1, 2), sublinear_tf=True)
         try:
             mat = vec.fit_transform(texts)
         except ValueError:
@@ -79,7 +79,7 @@ def _tfidf_title(texts: List[str], n: int) -> str:
     return " ".join(k.title() for k in keywords[:n]) if keywords else "Untitled"
 
 
-# ── main class ────────────────────────────────────────────────────────────────
+#  main class 
 
 class SentenceSegmentation:
     def __init__(

@@ -1,6 +1,9 @@
 ﻿import numpy as np
 from collections import Counter
-from .tokenizer import tokenize
+try:
+    from .tokenizer import tokenize
+except ImportError:
+    from tokenizer import tokenize
 
 
 class BM25Encoder:

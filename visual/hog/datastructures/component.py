@@ -7,17 +7,7 @@ from visual.hog.datastructures.bbox_regressor import BBoxRegressor
 
 
 class Component:
-    def __init__(
-        self,
-        component_id,
-        class_name,
-        cell_w,
-        cell_h,
-        cell_size: int = 8,
-        c_svm: float = 0.01,
-        max_itr_svm: int = 10_000,
-        alpha: float = 1000.0,
-    ):
+    def __init__(self, component_id, class_name, cell_w, cell_h, cell_size=8, c_svm=0.01, max_itr_svm=10000, alpha=1000.0):
         self.id = component_id
         self.cls_name = class_name
         self.cell_w = cell_w
@@ -44,10 +34,9 @@ class Component:
     def __len__(self):
         return self.X_pos.shape[0] + self.X_bg.shape[0] + self.X_pos_other_classes.shape[0]
 
-    def counts(self) -> tuple[int, int, int]:
+    def counts(self):
         return self.X_pos.shape[0], self.X_bg.shape[0], self.X_pos_other_classes.shape[0]
 
-    
     def _check_svm_perf(self, X, y):
         y_pred = self.svm.predict(X)
         acc = accuracy_score(y, y_pred)
@@ -57,7 +46,7 @@ class Component:
         print(f"Component {self.id} ({self.cls_name}) - SVM performance on training set: ")
         print(f"\taccuracy = {acc:.4f}, precision = {prec:.4f}, recall = {rec:.4f}, F1 = {f1:.4f}")
 
-    def fit_svm(self, split_ratio: float | None = None) -> None:
+    def fit_svm(self, split_ratio=None):
         n_pos = self.X_pos.shape[0]
         n_neg = self.X_bg.shape[0] + self.X_pos_other_classes.shape[0]
         if n_pos == 0:
@@ -124,9 +113,8 @@ class Component:
         self.X_cal = X_val
         self.y_cal = y_val
         del X_train, y_train
-        
 
-    def clear_easy_negatives(self, decision_threshold: float = -1.0) -> None:
+    def clear_easy_negatives(self, decision_threshold=-1.0):
         if self.X_bg.shape[0] == 0:
             return
         c1 = self.X_bg.shape[0]
@@ -136,8 +124,7 @@ class Component:
         c2 = self.X_bg.shape[0]
         print(f"Component {self.id} ({self.cls_name}): cleared {c1 - c2} easy negatives, {c2} hard negatives remain.")
 
-
-    def fit_calibration(self) -> None:
+    def fit_calibration(self):
         X_val = np.array([])
         y_val = np.array([])
         if self.X_cal.shape[0] > 0:
@@ -168,9 +155,8 @@ class Component:
             return
         self.cal = CalibratedClassifierCV(self.svm, method="sigmoid", cv="prefit")
         self.cal.fit(X_val, y_val)
-        
-        
-    def del_training_data(self) -> None:
+
+    def del_training_data(self):
         self.X_pos = np.array([])
         self.X_bg = np.array([])
         self.X_pos_other_classes = np.array([])
@@ -178,7 +164,7 @@ class Component:
         self.y_cal = np.array([])
         self.bbr_X = np.array([])
         self.bbr_y = np.array([])
-        
+
     def save_training_data(self, path):
         prfix = f"component_{self.cls_name}_{self.id}"
         np.save(path / f"{prfix}_X_pos.npy", self.X_pos)

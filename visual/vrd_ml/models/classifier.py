@@ -1,7 +1,6 @@
 import os
 import pickle
 import numpy as np
-from typing import List, Optional, Dict, Tuple
 from sklearn.svm import LinearSVC
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.ensemble import RandomForestClassifier
@@ -11,9 +10,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.metrics import classification_report
 
 
-SUPPORTED_CLASSIFIERS = ("svm", "rf", "lr")
-
-def _build_classifier(name: str, **kwargs) -> object:
+def _build_classifier(name, **kwargs):
     name = name.lower()
     if name == "svm":
         base = LinearSVC(
@@ -44,38 +41,33 @@ def _build_classifier(name: str, **kwargs) -> object:
             n_jobs=-1,
         )
     else:
-        raise ValueError(f"Unknown classifier '{name}'. Choose from {SUPPORTED_CLASSIFIERS}")
+        raise ValueError(f"Unknown classifier '{name}")
 
 
 class PredicateClassifier:
     def __init__(
         self,
-        classifier_name: str = "svm",
-        label_names: Optional[List[str]] = None,
-        idx2pred: Optional[Dict[int, str]] = None,
+        classifier_name="svm",
+        label_names=None,
+        idx2pred=None,
         **clf_kwargs,
     ):
         self.classifier_name = classifier_name
-        self.label_names = label_names if label_names is not None else []
+        self.label_names = label_names if label_names != None else []
         self.n_classes = len(self.label_names)
         self.label2idx = {l: i for i, l in enumerate(self.label_names)}
-        if idx2pred is not None:
+        if idx2pred != None:
             self._idx2pred = idx2pred
         else:
             self._idx2pred = {i: l for i, l in enumerate(self.label_names)}
 
         self._clf_kwargs = clf_kwargs
-        self.pipeline: Optional[Pipeline] = None
-        self.is_fitted: bool = False
-        self.feature_dim: Optional[int] = None
+        self.pipeline = None
+        self.is_fitted = False
+        self.feature_dim = None
 
 
-    def fit(
-        self,
-        X: np.ndarray,   # (N, D) feature matrix
-        y: np.ndarray,   # (N,)   integer predicate indices
-        verbose: bool = True,
-    ) -> "PredicateClassifier":
+    def fit(self, X, y, verbose=True):
         self.feature_dim = X.shape[1]
         mask = y >= 0
         X_train = X[mask]
@@ -86,13 +78,9 @@ class PredicateClassifier:
                 "Need at least 2 predicate classes in training data. "
                 "Check that your dataset has diverse relationships."
             )
-
-        if verbose:
-            print(f"[classifier] Training {self.classifier_name.upper()} "
-                  f"on {X_train.shape[0]:,} samples, "
-                  f"{len(unique_classes)} classes, "
-                  f"dim={X_train.shape[1]}")
-
+        if verbose == True:
+            print(f"[classifier] Training {self.classifier_name.upper()} on {X_train.shape[0]} samples, "
+                  f"{len(unique_classes)} classes, dim={X_train.shape[1]}")
         clf = _build_classifier(self.classifier_name, **self._clf_kwargs)
         self.pipeline = Pipeline([
             ("scaler", StandardScaler()),
@@ -100,31 +88,25 @@ class PredicateClassifier:
         ])
         self.pipeline.fit(X_train, y_train)
         self.is_fitted = True
-
-        if verbose:
+        if verbose == True:
             y_pred = self.pipeline.predict(X_train)
             train_acc = (y_pred == y_train).mean()
             print(f"[classifier] Training accuracy: {train_acc:.3f}")
-
         return self
 
-
-    def predict(self, X: np.ndarray) -> np.ndarray:
+    def predict(self, X):
         self._check_fitted()
         return self.pipeline.predict(X)
 
-    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+    def predict_proba(self, X):
         self._check_fitted()
         return self.pipeline.predict_proba(X)
 
-    def predict_topk(
-        self,
-        X: np.ndarray,
-        k: int = 5,
-    ) -> List[List[Tuple[str, float]]]:
+
+    def predict_topk(self, X, k=5):
         self._check_fitted()
-        proba = self.predict_proba(X)   # (N, C)
-        classes = self.pipeline.classes_    # int indices seen during fit
+        proba = self.predict_proba(X)  # shape: (N, C)
+        classes = self.pipeline.classes_  # int indices seen during fit
         result = []
         for row in proba:
             top_local = np.argsort(row)[::-1][:k]
@@ -138,8 +120,7 @@ class PredicateClassifier:
             result.append(top)
         return result
 
-
-    def evaluate(self, X: np.ndarray, y: np.ndarray) -> Dict:
+    def evaluate(self, X, y):
         self._check_fitted()
         mask = y >= 0
         X_eval = X[mask]
@@ -157,8 +138,7 @@ class PredicateClassifier:
         )
         return {"accuracy": acc, "classification_report": report}
 
-
-    def save(self, path: str):
+    def save(self, path):
         self._check_fitted()
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         with open(path, "wb") as f:
@@ -169,10 +149,10 @@ class PredicateClassifier:
                 "idx2pred": self._idx2pred,
                 "feature_dim": self.feature_dim,
             }, f)
-        print(f"[classifier] Saved → {path}")
+        print(f"[classifier] Saved to {path}")
 
     @classmethod
-    def load(cls, path: str) -> "PredicateClassifier":
+    def load(cls, path):
         with open(path, "rb") as f:
             state = pickle.load(f)
         obj = cls(
@@ -183,9 +163,9 @@ class PredicateClassifier:
         obj.pipeline = state["pipeline"]
         obj.feature_dim = state["feature_dim"]
         obj.is_fitted = True
-        print(f"[classifier] Loaded ← {path}")
+        print(f"[classifier] Loaded from {path}")
         return obj
 
     def _check_fitted(self):
-        if not self.is_fitted:
+        if self.is_fitted != True:
             raise RuntimeError("Classifier not fitted yet. Call .fit() first.")

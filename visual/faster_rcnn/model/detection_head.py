@@ -5,6 +5,7 @@ from torchvision.ops import roi_align
 from torchvision.models import vgg16 as _vgg16
 from visual.faster_rcnn.utils.box_utils import bbox_trans, iou_matrix
 
+
 class RoIPool(nn.Module):
     def __init__(self, out_size=7, scale=1/16):
         super().__init__()
@@ -16,16 +17,19 @@ class RoIPool(nn.Module):
         C = feat.shape[1]
         out = torch.zeros(N, C, self.out_size, self.out_size, device=feat.device, dtype=feat.dtype)
         for i in range(N):
-            x1 = (rois[i,0]*self.scale).floor().long().clamp(min=0)
-            y1 = (rois[i,1]*self.scale).floor().long().clamp(min=0)
-            x2 = (rois[i,2]*self.scale).ceil().long().clamp(min=x1+1)
-            y2 = (rois[i,3]*self.scale).ceil().long().clamp(min=y1+1)
+            # convert roi (img) coords to feature map coords
+            x1 = (rois[i,0] * self.scale).floor().long().clamp(min=0)
+            y1 = (rois[i,1] * self.scale).floor().long().clamp(min=0)
+            x2 = (rois[i, 2] * self.scale).ceil().long().clamp(min=x1+1)
+            y2 = (rois[i,3] * self.scale).ceil().long().clamp(min=y1+1)
             x2 = x2.clamp(max=feat.shape[3])
             y2 = y2.clamp(max=feat.shape[2])
             roi_f = feat[0, :, y1:y2, x1:x2]
-            if roi_f.numel() == 0: continue
+            if roi_f.numel() == 0:
+                continue
             out[i] = F.adaptive_max_pool2d(roi_f.unsqueeze(0), self.out_size)[0]
         return out
+
 
 class RoIAlign(nn.Module):
     def __init__(self, out_size=7, scale=1/16):
@@ -47,7 +51,6 @@ class RoIAlign(nn.Module):
             sampling_ratio=-1,
             aligned=True,
         )
-
 
 
 class DetectionHead(nn.Module):
@@ -78,7 +81,7 @@ class DetectionHead(nn.Module):
         self._init_weights()
 
     def _init_weights(self):
-        if self.pretrained:
+        if self.pretrained == True:
             clf = _vgg16(weights="IMAGENET1K_V1").classifier
             self.fc6.weight.data.copy_(clf[0].weight.data)
             self.fc6.bias.data.copy_(clf[0].bias.data)
@@ -95,7 +98,7 @@ class DetectionHead(nn.Module):
         nn.init.constant_(self.bbox_pred.bias, 0)
 
     def forward(self, feat, proposals, gt_boxes=None, gt_labels=None):
-        if self.training and gt_boxes is not None:
+        if self.training == True and gt_boxes is not None:
             proposals, lbls, reg_tgt = self._sample(proposals, gt_boxes, gt_labels)
         if proposals.shape[0] == 0:
             C = self.num_classes
@@ -105,8 +108,6 @@ class DetectionHead(nn.Module):
             if not self.training or gt_boxes is None:
                 return empty_cls, empty_reg, proposals
             z = feat.sum() * 0.0
-            # return zero losses as tensors (not integer zero) to avoid issues with autograd
-            # and use .backward() for backpropagation to compute gradients without errors
             return z, z
         pooled = self.roi(feat, proposals)
         flat = pooled.flatten(start_dim=1)

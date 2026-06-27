@@ -1,6 +1,5 @@
 import numpy as np
 import os
-from typing import Dict, Optional
 
 EMBED_DIM = 50
 # one for subject and one for object
@@ -9,18 +8,18 @@ SEMANTIC_DIM = EMBED_DIM * 2
 class GloVeEmbedder:
     def __init__(
         self,
-        glove_path: Optional[str] = None,
+        glove_path=None,
     ):
-        self._vectors: Dict[str, np.ndarray] = {}
+        self._vectors = {}
         self._dim = EMBED_DIM
         self._use_hash_fallback = False
-
         if glove_path and os.path.isfile(glove_path):
             self._load_glove(glove_path)
         else:
+            print(f"[semantic] Warning: GloVe file not found at '{glove_path}', using hash fallback")
             self._use_hash_fallback = True
 
-    def _load_glove(self, path: str):
+    def _load_glove(self, path):
         print(f"[semantic] Loading GloVe from {path}", flush=True)
         count = 0
         with open(path, encoding="utf-8") as f:
@@ -33,12 +32,12 @@ class GloVeEmbedder:
                     count += 1
         print(f"[semantic] Loaded {count} word vectors (dim={self._dim})")
 
-    def _hash_embed(self, word: str) -> np.ndarray:
+    def _hash_embed(self, word):
         rng = np.random.default_rng(abs(hash(word)) % (2**32))
         return rng.standard_normal(self._dim).astype(np.float32)
 
-    def embed(self, word: str) -> np.ndarray:
-        if self._use_hash_fallback:
+    def embed(self, word):
+        if self._use_hash_fallback == True:
             return self._hash_embed(word)
         tokens = word.lower().split()
         vecs = []
@@ -56,10 +55,10 @@ class GloVeEmbedder:
         return np.mean(vecs, axis=0).astype(np.float32)
 
     @property
-    def dim(self) -> int:
+    def dim(self):
         return self._dim
 
-    def similarity(self, word_a: str, word_b: str) -> float:
+    def similarity(self, word_a, word_b):
         a = self.embed(word_a)
         b = self.embed(word_b)
         denom = (np.linalg.norm(a) * np.linalg.norm(b))
@@ -67,28 +66,22 @@ class GloVeEmbedder:
 
 
 class SemanticFeatureExtractor:
-    dim: int = SEMANTIC_DIM
+    dim = SEMANTIC_DIM
 
-    def __init__(self, glove_path: Optional[str] = None):
+    def __init__(self, glove_path=None):
         self.embedder = GloVeEmbedder(glove_path=glove_path)
 
-    def extract(self, subj_label: str, obj_label: str) -> np.ndarray:
+    def extract(self, subj_label, obj_label):
         sv = self.embedder.embed(subj_label)
         ov = self.embedder.embed(obj_label)
         feat = np.concatenate([sv, ov]).astype(np.float32)
         assert feat.shape == (SEMANTIC_DIM,), (f"Expected {SEMANTIC_DIM}-d, got {feat.shape}")
         return feat
 
-    def extract_batch(self, pairs: list) -> np.ndarray:
+    def extract_batch(self, pairs):
         return np.stack([self.extract(s, o) for s, o in pairs], axis=0)
 
-    def zero_shot_nearest(
-        self,
-        query_subj: str,
-        query_obj: str,
-        known_pairs: list,
-        top_k: int = 5,
-    ) -> list:
+    def zero_shot_nearest(self, query_subj, query_obj, known_pairs, top_k=5):
         q = self.extract(query_subj, query_obj)
         scored = []
         for s, o in known_pairs:

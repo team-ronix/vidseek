@@ -6,8 +6,7 @@ import pickle
 import os
 
 
-
-def _voc_ap_11pt(scores, tp_flags, n_gt) -> float:
+def _voc_ap_11pt(scores, tp_flags, n_gt):
     if n_gt == 0:
         return float("nan")
     order = np.argsort(scores)[::-1]
@@ -26,20 +25,20 @@ def evaluate_hog_detection_ap(
     detector,
     dataset,
     max_imgs=None,
-    iou_match_thresh: float = 0.5,
-    nms_iou_thresh: float = 0.3,
-    score_thresh: float = 0.05,
-    split_name: str = "Test",
+    iou_match_thresh=0.5,
+    nms_iou_thresh=0.3,
+    score_thresh=0.05,
+    split_name="Test",
     pyramid_lambda=None,
-    use_context: bool = True,
+    use_context=True,
     checkpoint_path=None,
-    checkpoint_every: int = 50,
+    checkpoint_every=50,
 ):
     active = [c for c in detector.classes if detector.cls_comps.get(c)]
     n = len(dataset) if max_imgs is None else min(max_imgs, len(dataset))
-    det_scores: dict = defaultdict(list)
-    det_tp: dict = defaultdict(list)
-    n_gt: dict = defaultdict(int)
+    det_scores = defaultdict(list)
+    det_tp = defaultdict(list)
+    n_gt = defaultdict(int)
     start_idx = 0
     if checkpoint_path and os.path.exists(checkpoint_path):
         with open(checkpoint_path, "rb") as f:
@@ -56,7 +55,7 @@ def evaluate_hog_detection_ap(
             processed += 1
             continue
         gt_boxes, gt_labels = dataset.get_annotation(idx)
-        gt_by_class: dict = defaultdict(list)
+        gt_by_class = defaultdict(list)
         for box, lbl in zip(gt_boxes, gt_labels):
             if lbl in active:
                 gt_by_class[lbl].append(list(box))
@@ -68,7 +67,7 @@ def evaluate_hog_detection_ap(
             pyramid_lambda=pyramid_lambda,
             use_context=use_context,
         )
-        dets_by_class: dict = defaultdict(list)
+        dets_by_class = defaultdict(list)
         for box, score, lbl in zip(boxes, scores, labels):
             if lbl in active:
                 dets_by_class[lbl].append((score, list(box)))
@@ -76,13 +75,15 @@ def evaluate_hog_detection_ap(
             dets_by_class[cls].sort(key=lambda t: t[0], reverse=True)
             gt_matched = [False] * len(gt_by_class[cls])
             for score, det_box in dets_by_class[cls]:
-                best_iou, best_j = 0.0, -1
+                best_iou = 0.0
+                best_j = -1
                 for j, gt_box in enumerate(gt_by_class[cls]):
-                    if gt_matched[j]:
+                    if gt_matched[j] == True:
                         continue
                     iou = calculate_iou(det_box, gt_box)
                     if iou > best_iou:
-                        best_iou, best_j = iou, j
+                        best_iou = iou
+                        best_j = j
                 if best_iou >= iou_match_thresh and best_j >= 0:
                     gt_matched[best_j] = True
                     det_tp[cls].append(1)

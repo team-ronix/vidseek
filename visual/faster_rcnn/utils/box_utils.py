@@ -16,13 +16,13 @@ def bbox_trans(anchors, gt):
     return torch.stack([tx, ty, tw, th], 1)
 
 def bbox_trans_inv(anchors, deltas):
-    wa = anchors[:,2] - anchors[:,0]
-    ha = anchors[:,3] - anchors[:,1]
-    xa = anchors[:,0] + .5*wa
-    ya = anchors[:,1] + .5*ha
-    tx, ty = deltas[:,0], deltas[:,1]
-    tw = deltas[:,2].clamp(max=4.)
-    th = deltas[:,3].clamp(max=4.)
+    wa = anchors[:, 2] - anchors[:, 0]
+    ha = anchors[:, 3] - anchors[:, 1]
+    xa = anchors[:, 0] + .5*wa
+    ya = anchors[:, 1] + .5*ha
+    tx, ty = deltas[:, 0], deltas[:, 1]
+    tw = deltas[:, 2].clamp(max=4.)
+    th = deltas[:, 3].clamp(max=4.)
     x = tx*wa + xa
     y = ty*ha + ya
     w = torch.exp(tw)*wa
@@ -44,12 +44,12 @@ def iou_matrix(a, b):
 
 def clip_boxes(boxes, img_shape):
     H, W = img_shape
-    boxes[:,0::2] = boxes[:,0::2].clamp(0, W)
-    boxes[:,1::2] = boxes[:,1::2].clamp(0, H)
+    boxes[:, 0::2] = boxes[:, 0::2].clamp(0, W)
+    boxes[:, 1::2] = boxes[:, 1::2].clamp(0, H)
     return boxes
 def filter_boxes(boxes, min_size):
-    w = boxes[:,2] - boxes[:,0]
-    h = boxes[:,3] - boxes[:,1]
+    w = boxes[:, 2] - boxes[:, 0]
+    h = boxes[:, 3] - boxes[:, 1]
     return (w >= min_size) & (h >= min_size)
 
 
@@ -61,7 +61,8 @@ def nms(boxes, scores, thresh):
     while order.numel():
         i = order[0].item()
         keep.append(i)
-        if order.numel() == 1: break
+        if order.numel() == 1:
+            break
         rest = order[1:]
         ious = iou_matrix(boxes[i].unsqueeze(0), boxes[rest])[0]
         order = rest[ious <= thresh]

@@ -3,12 +3,7 @@ from visual.vrd_ml.vrd_dataset import BBox
 
 SPATIAL_DIM = 14
 
-def compute_spatial_features(
-    subj_box: BBox,
-    obj_box: BBox,
-    img_w: int,
-    img_h: int,
-) -> np.ndarray:
+def compute_spatial_features(subj_box, obj_box, img_w, img_h):
     eps = 1e-6
     W, H = float(img_w), float(img_h)
     scx, scy = subj_box.center
@@ -32,30 +27,18 @@ def compute_spatial_features(
         sub_norm,
         obj_norm,
     ]).astype(np.float32)
-    assert feat.shape == (SPATIAL_DIM,), f"Expected {SPATIAL_DIM}-d, got {feat.shape}"
     return feat
 
 
-def compute_union_box(subj_box: BBox, obj_box: BBox) -> BBox:
+def compute_union_box(subj_box, obj_box):
     return subj_box.union(obj_box)
 
 
 class SpatialFeatureExtractor:
-    dim: int = SPATIAL_DIM
+    dim = SPATIAL_DIM
 
-    def extract(
-        self,
-        subj_box: BBox,
-        obj_box: BBox,
-        img_w: int,
-        img_h: int,
-    ) -> np.ndarray:
+    def extract(self, subj_box, obj_box, img_w, img_h):
         return compute_spatial_features(subj_box, obj_box, img_w, img_h)
 
-    def extract_batch(
-        self,
-        pairs: list,   # list of (BBox, BBox)
-        img_w: int,
-        img_h: int,
-    ) -> np.ndarray:
+    def extract_batch(self, pairs, img_w, img_h):
         return np.stack([compute_spatial_features(s, o, img_w, img_h) for s, o in pairs], axis=0)
