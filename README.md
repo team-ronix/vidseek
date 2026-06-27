@@ -211,6 +211,98 @@ The pipeline stages run in order:
 
 ---
 
+## Run Vision Models Separately
+
+These sections let you train or run each visual model independently from the full ingestion pipeline.
+
+### 1) Faster R-CNN (folder: `visual/faster_rcnn`)
+
+Files:
+
+- `visual/faster_rcnn/inference.py` for single-image inference
+- `visual/faster_rcnn/train/pipeline.py` for training
+- `visual/faster_rcnn/faster_rcnn_final.pth` pretrained/final weights
+
+Train:
+
+```bash
+cd visual/faster_rcnn
+make train DATA_PATH=./data CHECKPOINT_PATH=./checkpoints
+```
+
+Run inference on one image:
+
+```bash
+cd visual/faster_rcnn
+make infer IMAGE_PATH=./sample.jpg MODEL_PATH=./faster_rcnn_final.pth SCORE_THRESH=0.5
+```
+
+Or run directly from project root:
+
+```bash
+poetry run python visual/faster_rcnn/inference.py --image-path ./sample.jpg --model-path visual/faster_rcnn/faster_rcnn_final.pth --score-thresh 0.5
+```
+
+### 2) HOG Detector (folder: `visual/hog`)
+
+Files:
+
+- `visual/hog/pipeline.py` for training/evaluation pipeline
+- `visual/hog/infer.py` for single-image inference
+- `visual/hog/model/` saved detector model directory
+
+Train pipeline:
+
+```bash
+cd visual/hog
+make train TRAIN_CONFIG=./config/train.json
+```
+
+Evaluate only:
+
+```bash
+cd visual/hog
+make eval TRAIN_CONFIG=./config/train.json
+```
+
+Run inference:
+
+```bash
+cd visual/hog
+make infer DETECT_CONFIG=./config/detect.json
+```
+
+JSON inference output:
+
+```bash
+cd visual/hog
+make infer-json DETECT_CONFIG=./config/detect.json
+```
+
+Or run direct inference command from project root:
+
+```bash
+poetry run python visual/hog/infer.py --model-dir visual/hog/model --image ./sample.jpg --threshold 0.3 --nms-thresh 0.3 --output ./result.jpg
+```
+
+### 3) VRD Model (folder: `visual/vrd_ml`)
+
+Files:
+
+- `visual/vrd_ml/vrd_pipeline.ipynb` end-to-end training/evaluation notebook
+- `visual/vrd_ml/models/vrd_model.py` core model
+- `visual/vrd_ml/VRD.py` runtime wrapper used by the API/pipeline
+- `visual/vrd_ml/checkpoints/vrd_rf_real.pkl` and `visual/vrd_ml/checkpoints/vrd_rf.pkl` expected trained checkpoint
+- `wiki_giga_2024_50_MFT20_vectors_seed_123_alpha_0.75_eta_0.075_combined.txt`: the used word embedding and located in `visual/vrd_ml/`
+
+
+The notebook trains and saves:
+
+- `visual/vrd_ml/checkpoints/vrd_rf_real.pkl`
+- `visual/vrd_ml/checkpoints/vrd_rf_real_clf.pkl`
+
+---
+
 ## Running the API Server
 
 ```bash
