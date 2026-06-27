@@ -235,7 +235,7 @@ The pipeline stages run in order:
 
 These sections let you train or run each visual model independently from the full ingestion pipeline.
 
-### 1) Faster R-CNN (folder: `visual/faster_rcnn`)
+### Faster R-CNN (folder: `visual/faster_rcnn`)
 
 That model is trained on the PASCAL VOC 2007 dataset available at 
 [PASCAL VOC 2007](https://www.robots.ox.ac.uk/~vgg/projects/pascal/VOC/voc2007/index.html).  
@@ -260,7 +260,10 @@ cd visual/faster_rcnn
 make infer IMAGE_PATH=./sample.jpg MODEL_PATH=./faster_rcnn_final.pth SCORE_THRESH=0.5
 ```
 
-### 2) HOG Detector (folder: `visual/hog`)
+Note:
+- We can edit arguments in `visual/faster_rcnn/makefile`
+
+### HOG Detector (folder: `visual/hog`)
 
 That model is trained on the PASCAL VOC 2007 dataset available at 
 [PASCAL VOC 2007](https://www.robots.ox.ac.uk/~vgg/projects/pascal/VOC/voc2007/index.html). 
@@ -298,8 +301,10 @@ JSON inference output:
 cd visual/hog
 make infer-json DETECT_CONFIG=./config/detect.json
 ```
+Note:
+- We can edit arguments using configs `visual/hog/config/train.json` and `visual/hog/config/detect.json`
 
-### 3) VRD Model (folder: `visual/vrd_ml`)
+### VRD Model (folder: `visual/vrd_ml`)
 
 That model is trained on Stanford VRD dataset available at 
 [Stanford Dataset](https://cs.stanford.edu/people/ranjaykrishna/vrd/). 
@@ -317,6 +322,9 @@ The notebook trains and saves:
 
 - `visual/vrd_ml/checkpoints/vrd_rf_real.pkl`
 - `visual/vrd_ml/checkpoints/vrd_rf_real_clf.pkl`
+
+Note:
+- We need to edit the data path in notebook before running
 
 ---
 
