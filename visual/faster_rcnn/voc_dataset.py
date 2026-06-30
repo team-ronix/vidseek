@@ -11,6 +11,7 @@ VOC_CLASSES = (
 )
 CLASS_TO_IDX = {c: i+1 for i, c in enumerate(VOC_CLASSES)}
 
+
 class VOCDataset(Dataset):
     def __init__(
         self,
@@ -30,6 +31,7 @@ class VOCDataset(Dataset):
         self.max_size = max_size
         self.pixel_mean = np.array([0.485, 0.456, 0.406], np.float32)
         self.pixel_std = np.array([0.229, 0.224, 0.225], np.float32)
+        print(f"VOCDataset: loaded {len(self.ids)} images for split '{split}'")
 
     def __len__(self):
         return len(self.ids)

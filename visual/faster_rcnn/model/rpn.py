@@ -33,7 +33,9 @@ class RPN(nn.Module):
         self.lam = lam
         self.k = len(anchor_scales) * len(anchor_ratios)
         self.conv = nn.Conv2d(in_ch, mid_ch, 3, padding=1)
+        # 2 outputs per anchor, objectness (fg vs bg)
         self.cls_layer = nn.Conv2d(mid_ch, 2*self.k, 1)
+        # 4 outputs per anchor, box regression deltas
         self.reg_layer = nn.Conv2d(mid_ch, 4*self.k, 1)
         self.anchor_gen = AnchorGenerator(anchor_scales, anchor_ratios, feat_stride)
         self._init_weights()
@@ -43,15 +45,15 @@ class RPN(nn.Module):
             nn.init.normal_(l.weight, 0, 0.01)
             nn.init.constant_(l.bias, 0)
 
-
     def forward(self, feat, img_shape, gt_boxes=None):
         B, C, fh, fw = feat.shape
         anchors = self.anchor_gen.generate(fh, fw).to(feat.device)
         h = F.relu(self.conv(feat), inplace=True)
         cls_logits = self.cls_layer(h)
         reg_deltas = self.reg_layer(h)
-        cls_t = cls_logits.permute(0,2,3,1).contiguous().view(-1, 2)
-        reg_t = reg_deltas.permute(0,2,3,1).contiguous().view(-1, 4)
+        # reshape to (num of anchors, 2) and (num of anchors, 4)
+        cls_t = cls_logits.permute(0, 2, 3, 1).contiguous().view(-1, 2)
+        reg_t = reg_deltas.permute(0, 2, 3, 1).contiguous().view(-1, 4)
         obj_scrs = F.softmax(cls_t, 1)[:, 1]
         props = bbox_trans_inv(anchors, reg_t.detach())
         props = clip_boxes(props, img_shape)
@@ -62,17 +64,16 @@ class RPN(nn.Module):
         order = sc.argsort(descending=True)[:pre_k]
         props, sc = props[order], sc[order]
         keep = nms(props, sc, self.nms_thresh)[:post_k]
-        props= props[keep]
+        props = props[keep]
         if not self.training or gt_boxes is None:
             return props, None, None
         cls_loss, reg_loss = self._loss(anchors, cls_t, reg_t, gt_boxes, img_shape)
         return props, cls_loss, reg_loss
 
-
     def _loss(self, anchors, cls_t, reg_t, gt_boxes, img_shape):
         H, W = img_shape
         lbls = torch.full((len(anchors),), -1, dtype=torch.long, device=anchors.device)
-        inside = ((anchors[:,0]>=0)&(anchors[:,1]>=0)&(anchors[:,2]<=W)&(anchors[:,3]<=H))
+        inside = ((anchors[:, 0] >= 0) & (anchors[:, 1] >= 0) & (anchors[:, 2] <= W) & (anchors[:, 3] <= H))
         if len(gt_boxes) == 0:
             lbls[inside] = 0
         else:
@@ -84,8 +85,8 @@ class RPN(nn.Module):
             if ious.numel() > 0:
                 lbls[idx_in[ious.argmax(0)]] = 1
         num_pos = int(self.rpn_batch * self.pos_frac)
-        pos_i = (lbls==1).nonzero(as_tuple=True)[0]
-        neg_i = (lbls==0).nonzero(as_tuple=True)[0]
+        pos_i = (lbls == 1).nonzero(as_tuple=True)[0]
+        neg_i = (lbls == 0).nonzero(as_tuple=True)[0]
         if len(pos_i) > num_pos:
             lbls[pos_i[torch.randperm(len(pos_i))[num_pos:]]] = -1
         num_neg = self.rpn_batch - min(len(pos_i), num_pos)

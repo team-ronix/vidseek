@@ -1,5 +1,5 @@
 # shared defaults so every training script uses the same model architecture
-# and data paths without copy-pasting constants everywhere
+# and data paths 
 
 MODEL_CONFIG = {
     "d_model":  384,    # embedding dimension
@@ -7,7 +7,7 @@ MODEL_CONFIG = {
     "n_heads":  6,      # number of attention heads (d_model must be divisible by n_heads)
     "d_ff":     1536,   # feed-forward inner dimension (typically 4x d_model)
     "dropout":  0.1,
-    "pooling":  "mean", # how to pool token vectors → sentence vector ("mean" or "max")
+    "pooling":  "mean", # how to pool token vectors -> sentence vector ("mean" or "max")
 }
 
 DATA_CONFIG = {

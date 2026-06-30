@@ -4,7 +4,7 @@ import torchvision.models as tvm
 class VGG16Backbone(nn.Module):
     def __init__(self, pretrained=True):
         super().__init__()
-        if pretrained:
+        if pretrained == True:
             vgg = tvm.vgg16(weights=tvm.VGG16_Weights.IMAGENET1K_V1)
             features = list(vgg.features.children())
             self.block1 = nn.Sequential(*features[0:5])
@@ -41,8 +41,7 @@ class VGG16Backbone(nn.Module):
                 nn.Conv2d(512, 512, kernel_size=3, padding=1), nn.ReLU(inplace=True)
             )
             self._init_weights()
-            
-            
+
     def _init_weights(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):

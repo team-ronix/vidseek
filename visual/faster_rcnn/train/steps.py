@@ -1,6 +1,6 @@
 import os
 import torch
-from model.faster_rcnn import FasterRCNN
+from visual.faster_rcnn.model.faster_rcnn import FasterRCNN
 from visual.faster_rcnn.train.learning import train_rpn_iters, train_det_iters, clear_mid_ckpts
 
 
@@ -21,9 +21,9 @@ def step1(chck_path, data_loader, num_classes, device, iter_warm, iter_cool):
     else:
         model_s1 = FasterRCNN(num_classes=num_classes).to(device)
         _freeze_conv_layers(model_s1)
-        train_rpn_iters(model_s1, data_loader, device, iter_warm, 1e-3, 
+        train_rpn_iters(model_s1, data_loader, device, iter_warm, 1e-3,
                         'Step1-warm', ckpt_prefix=f'{chck_path}/step1_warm', ckpt_every=20_000)
-        train_rpn_iters(model_s1, data_loader, device, iter_cool, 1e-4, 
+        train_rpn_iters(model_s1, data_loader, device, iter_cool, 1e-4,
                         'Step1-cool', ckpt_prefix=f'{chck_path}/step1_cool', ckpt_every=20_000)
         torch.save(model_s1.state_dict(), step1_path)
         clear_mid_ckpts(f'{chck_path}/step1_warm')
@@ -41,9 +41,9 @@ def step2(model_s1, chck_path, data_loader, num_classes, device, iter_warm, iter
     else:
         model_s2 = FasterRCNN(num_classes=num_classes).to(device)
         _freeze_conv_layers(model_s2)
-        train_det_iters(model_s2, model_s1, data_loader, device, iter_warm, 1e-3, 
+        train_det_iters(model_s2, model_s1, data_loader, device, iter_warm, 1e-3,
                         'Step2-warm', ckpt_prefix=f'{chck_path}/step2_warm', ckpt_every=20_000)
-        train_det_iters(model_s2, model_s1, data_loader, device, iter_cool, 1e-4, 
+        train_det_iters(model_s2, model_s1, data_loader, device, iter_cool, 1e-4,
                         'Step2-cool', ckpt_prefix=f'{chck_path}/step2_cool', ckpt_every=20_000)
         torch.save(model_s2.state_dict(), step2_path)
         clear_mid_ckpts(f'{chck_path}/step2_warm')

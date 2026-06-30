@@ -77,6 +77,7 @@ def save_chart(mAP, aps, save_path):
     plt.savefig(save_path, dpi=120, bbox_inches='tight')
     plt.show()
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-path", help="Path to the VOC dataset")
@@ -86,14 +87,17 @@ if __name__ == "__main__":
     parser.add_argument("--iter-ft-cool", help="Number of fitting cool-down iterations", type=int, default=10_000)
     parser.add_argument("--checkpoint-path", help="Path to the checkpoint file", type=str, default='checkpoints')
     args = parser.parse_args()
+
     DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f'Device : {DEVICE}')
     os.makedirs(args.checkpoint_path, exist_ok=True)
     NUM_CLASSES = len(VOC_CLASSES)
+
     trainval_loader, test_loader = build_dataset(args.data_path)
     model_s1 = step1(args.checkpoint_path, trainval_loader, NUM_CLASSES, DEVICE, args.iter_warm, args.iter_cool)
     model_s2 = step2(model_s1, args.checkpoint_path, trainval_loader, NUM_CLASSES, DEVICE, args.iter_warm, args.iter_cool)
     model_s3 = step3(model_s1, model_s2, args.checkpoint_path, trainval_loader, NUM_CLASSES, DEVICE, args.iter_ft_warm, args.iter_ft_cool)
     model_final = step4(model_s2, model_s3, args.checkpoint_path, trainval_loader, NUM_CLASSES, DEVICE, args.iter_ft_warm, args.iter_ft_cool)
+
     mAP, aps = run_eval(model_final, test_loader, "Final Model", NUM_CLASSES, DEVICE)
     save_chart(mAP, aps, f"{args.checkpoint_path}/final_chart.png")

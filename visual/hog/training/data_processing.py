@@ -6,20 +6,15 @@ from visual.hog.datastructures.voc_dataset import VOCDataset
 from visual.hog.datastructures.component import Component
 
 
-def _min_component_positives(n_samples: int) -> int:
+def _min_component_positives(n_samples):
     return max(15, min(40, int(0.10 * n_samples)))
 
 
-def process_dataset(
-    detector,
-    dataset: VOCDataset,
-    min_box_area: int = 400,
-    max_images: int | None = None,
-) -> tuple[dict, dict, dict, list]:
-    pos_patches: dict[str, list[np.ndarray]] = {cls: [] for cls in detector.classes}
-    bboxes_wh: dict[str, list[tuple[int, int]]] = {cls: [] for cls in detector.classes}
-    gt_boxes: dict[str, list[tuple[float, float, float, float]]] = {cls: [] for cls in detector.classes}
-    neg_images: list[tuple[str, list]] = []
+def process_dataset(detector, dataset, min_box_area=400, max_images=None):
+    pos_patches = {cls: [] for cls in detector.classes}
+    bboxes_wh = {cls: [] for cls in detector.classes}
+    gt_boxes = {cls: [] for cls in detector.classes}
+    neg_images = []
     n = len(dataset) if max_images is None else min(len(dataset), max_images)
     indices = np.random.permutation(n)
     for loop_index, index in enumerate(tqdm(indices, desc="Extracting patches")):
@@ -31,8 +26,10 @@ def process_dataset(
         for (xmin, ymin, xmax, ymax), cls in zip(boxes, lbls):
             if cls not in detector.classes:
                 continue
-            x0, y0 = max(0, int(xmin)), max(0, int(ymin))
-            x1, y1 = min(iw, int(xmax)), min(ih, int(ymax))
+            x0 = max(0, int(xmin))
+            y0 = max(0, int(ymin))
+            x1 = min(iw, int(xmax))
+            y1 = min(ih, int(ymax))
             w = max(0, x1 - x0)
             h = max(0, y1 - y0)
             if w * h < min_box_area:
@@ -51,8 +48,9 @@ def process_dataset(
         ]
         if ih >= 32 and iw >= 32:
             img_path = dataset._img_path(dataset.image_ids[index])
-            if img_path is not None:
+            if img_path != None:
                 neg_images.append((img_path, all_gt))
+
         del img, boxes, lbls
         if (loop_index + 1) % 100 == 0:
             gc.collect()
@@ -64,18 +62,13 @@ def process_dataset(
     return dict(pos_patches), dict(bboxes_wh), dict(gt_boxes), neg_images
 
 
-def learn_window_sizes(detector, bboxes_wh: dict) -> dict:
-    comp_labels: dict[str, np.ndarray] = {cls: np.zeros(0, dtype=int) for cls in detector.classes}
+def learn_window_sizes(detector, bboxes_wh):
+    comp_labels = {cls: np.zeros(0, dtype=int) for cls in detector.classes}
     for cls in detector.classes:
         whs_cls = np.array(bboxes_wh[cls]) if bboxes_wh[cls] else np.empty((0, 2))
         if len(whs_cls) == 0:
-            print(
-                f"Warning: No bounding boxes for class '{cls}', "
-                f"using default window size {detector.default_window_size}."
-            )
-            detector.cls_comps[cls].append(
-                _make_component(detector, comp_id=0, cls=cls)
-            )
+            print(f"Warning: No bounding boxes for class '{cls}', using default window size {detector.default_window_size}.")
+            detector.cls_comps[cls].append(_make_component(detector, comp_id=0, cls=cls))
             comp_labels[cls] = np.zeros(0, dtype=int)
             continue
         aspect_ratios = whs_cls[:, 0] / whs_cls[:, 1]
@@ -87,20 +80,10 @@ def learn_window_sizes(detector, bboxes_wh: dict) -> dict:
         detector.kmeans_clfs[cls] = kmeans
         unique_labels, counts = np.unique(raw_ids, return_counts=True)
         label_counts = dict(zip(unique_labels.tolist(), counts.tolist()))
-        surviving = [
-            lbl for lbl in unique_labels
-            if label_counts[lbl] >= min_pos
-        ]
-        sparse = [
-            lbl for lbl in unique_labels
-            if label_counts[lbl] < min_pos
-        ]
+        surviving = [lbl for lbl in unique_labels if label_counts[lbl] >= min_pos]
+        sparse = [lbl for lbl in unique_labels if label_counts[lbl] < min_pos]
         if sparse:
-            print(
-                f"[{cls}] Merging {len(sparse)} sparse cluster(s) "
-                f"(< {min_pos} samples, adaptive threshold for {n_samples} total) "
-                f"into nearest surviving cluster."
-            )
+            print(f"[{cls}] Merging {len(sparse)} sparse clusters into nearest surviving cluster.")
         if not surviving:
             surviving = [unique_labels[np.argmax(counts)]]
             sparse = [lbl for lbl in unique_labels if lbl not in surviving]
@@ -128,13 +111,8 @@ def learn_window_sizes(detector, bboxes_wh: dict) -> dict:
             comp_bboxes_whs = whs_cls[final_ids == orig_label]
             member_count = len(comp_bboxes_whs)
             if member_count == 0:
-                print(
-                    f"Warning: Empty cluster for class '{cls}' component {comp_id}, "
-                    f"using default window size {detector.default_window_size}."
-                )
-                detector.cls_comps[cls].append(
-                    _make_component(detector, comp_id=comp_id, cls=cls)
-                )
+                print(f"Warning: Empty cluster for class '{cls}' component {comp_id}, using default window size {detector.default_window_size}.")
+                detector.cls_comps[cls].append(_make_component(detector, comp_id=comp_id, cls=cls))
                 continue
             comp_aspect = np.mean(comp_bboxes_whs[:, 0] / comp_bboxes_whs[:, 1])
             areas = comp_bboxes_whs[:, 0] * comp_bboxes_whs[:, 1]
@@ -152,14 +130,11 @@ def learn_window_sizes(detector, bboxes_wh: dict) -> dict:
                 max_itr_svm=detector.max_itr_svm,
                 alpha=detector.bbr_alpha,
             ))
-            print(
-                f"Learned window for class '{cls}' comp {comp_id}: "
-                f"({comp_w:.0f}, {comp_h:.0f}) px [{member_count} positives]"
-            )
+            print(f"Learned window for class '{cls}' comp {comp_id}: ({comp_w:.0f}, {comp_h:.0f}) px [{member_count} positives]")
     return comp_labels
 
 
-def _make_component(detector, comp_id: int, cls: str) -> Component:
+def _make_component(detector, comp_id, cls):
     cell = detector.hog_descriptor.cell_size
     return Component(
         component_id=comp_id,

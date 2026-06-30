@@ -14,10 +14,9 @@ from visual.hog.eval import evaluate_hog_detection_ap
 VOC_CLASSES = [
     "aeroplane", "bicycle", "bird", "boat", "bottle",
     "bus", "car", "cat", "chair", "cow",
-    "diningtable","dog", "horse", "motorbike", "person",
-    "pottedplant","sheep", "sofa", "train", "tvmonitor",
+    "diningtable", "dog", "horse", "motorbike", "person",
+    "pottedplant", "sheep", "sofa", "train", "tvmonitor",
 ]
-
 
 
 def print_results(ap_per_class, mean_ap, classes):
@@ -52,9 +51,10 @@ def _config_value(config: dict, key: str, default=None):
 
 def parse_args():
     pre = argparse.ArgumentParser(add_help=False)
-    pre.add_argument("--config", default=None,help="Path to a JSON file with default training arguments")
+    pre.add_argument("--config", default=None, help="Path to a JSON file with default training arguments")
     pre_args, remaining = pre.parse_known_args()
     config = _load_config(pre_args.config)
+
     p = argparse.ArgumentParser(
         description="Train HOG detector on VOC and evaluate on test split",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -90,7 +90,7 @@ def parse_args():
     p.add_argument("--min-size", type=int, default=_config_value(config, "min_size", 48))
     p.add_argument("--n-components", type=int, default=_config_value(config, "n_components", 3))
     p.add_argument("--c-svm", type=float, default=_config_value(config, "c_svm", 0.001))
-    p.add_argument("--max-itr-svm", type=int, default=_config_value(config, "max_itr_svm", 50_000))
+    p.add_argument("--max-itr-svm", type=int, default=_config_value(config, "max_itr_svm", 50000))
     p.add_argument("--epochs", type=int, default=_config_value(config, "training_epochs", 10), dest="training_epochs")
     p.add_argument("--hard-neg-threshold", type=float, default=_config_value(config, "hard_neg_threshold", -1.0))
     p.add_argument("--pyramid-step", type=int, default=_config_value(config, "pyramid_step", 2))
@@ -104,7 +104,7 @@ def parse_args():
     p.add_argument("--rescorer-iou-thresh", type=float, default=_config_value(config, "rescorer_iou_thresh", 0.5))
     p.add_argument("--rescorer-c", type=float, default=_config_value(config, "rescorer_c", 0.1))
     p.add_argument("--rescorer-det-threshold", type=float, default=_config_value(config, "rescorer_det_threshold", 0.05))
-    p.add_argument("--rescorer-neg-size", type=int, default=_config_value(config, "rescorer_neg_size", 30_000))
+    p.add_argument("--rescorer-neg-size", type=int, default=_config_value(config, "rescorer_neg_size", 30000))
     p.add_argument("--rescorer-checkpoint-every", type=int, default=_config_value(config, "rescorer_checkpoint_every", 50))
     p.add_argument("--max-train-images", type=int, default=_config_value(config, "max_train_images"))
     p.add_argument("--max-rescore-images", type=int, default=_config_value(config, "max_rescore_images"))
@@ -140,33 +140,34 @@ def main():
     test_ds = VOCDataset(args.test_root, test_split, class_to_idx=CLASS_TO_IDX)
     print(f" Train: {len(train_ds)} images | Test: {len(test_ds)} images")
     hog_params = dict(
-        cell_size = args.cell_size,
-        n_orient_cs = args.n_orient_cs,
-        n_orient_ci = args.n_orient_ci,
-        alpha = args.alpha,
-        n_energy = args.n_energy,
-        n_octaves = args.n_octaves,
-        llambda = args.llambda,
-        min_size = args.min_size,
+        cell_size=args.cell_size,
+        n_orient_cs=args.n_orient_cs,
+        n_orient_ci=args.n_orient_ci,
+        alpha=args.alpha,
+        n_energy=args.n_energy,
+        n_octaves=args.n_octaves,
+        llambda=args.llambda,
+        min_size=args.min_size,
     )
+
     detector = HOGDetector(
-        classes = VOC_CLASSES,
-        hog_descriptor_params = hog_params,
-        n_components = args.n_components,
-        c_svm = args.c_svm,
-        max_itr_svm = args.max_itr_svm,
-        training_epochs = args.training_epochs,
-        hard_neg_threshold = args.hard_neg_threshold,
-        pyramid_step = args.pyramid_step,
-        max_hard_per_image = args.max_hard_per_image,
-        bg_multiplier = args.bg_multiplier,
-        other_classes_total_ratio = args.other_classes_total_ratio,
-        bbr_alpha = args.bbr_alpha,
-        min_iou_between_gt_and_latent = args.min_iou_between_gt_and_latent,
-        contextual_rescorer_iou_thresh = args.rescorer_iou_thresh,
-        contextual_rescorer_C = args.rescorer_c,
-        contextual_rescorer_detection_threshold = args.rescorer_det_threshold,
-        contextual_rescorer_neg_size = args.rescorer_neg_size,
+        classes=VOC_CLASSES,
+        hog_descriptor_params=hog_params,
+        n_components=args.n_components,
+        c_svm=args.c_svm,
+        max_itr_svm=args.max_itr_svm,
+        training_epochs=args.training_epochs,
+        hard_neg_threshold=args.hard_neg_threshold,
+        pyramid_step=args.pyramid_step,
+        max_hard_per_image=args.max_hard_per_image,
+        bg_multiplier=args.bg_multiplier,
+        other_classes_total_ratio=args.other_classes_total_ratio,
+        bbr_alpha=args.bbr_alpha,
+        min_iou_between_gt_and_latent=args.min_iou_between_gt_and_latent,
+        contextual_rescorer_iou_thresh=args.rescorer_iou_thresh,
+        contextual_rescorer_C=args.rescorer_c,
+        contextual_rescorer_detection_threshold=args.rescorer_det_threshold,
+        contextual_rescorer_neg_size=args.rescorer_neg_size,
     )
     if args.eval_only:
         print(f"\nLoading model from {args.model_dir}")
@@ -175,33 +176,36 @@ def main():
         print("\nStarting training")
         t0 = time.time()
         detector.train(
-            train_ds = train_ds,
-            min_box_area = args.min_box_area,
-            max_train_images = args.max_train_images,
-            max_rescore_images = args.max_rescore_images,
-            neg_patches_per_image = args.neg_patches_per_image,
-            checkpoint_path = args.checkpoint_dir,
-            skip_step1 = args.skip_step1,
-            rescorer_checkpoint_every = args.rescorer_checkpoint_every,
+            train_ds=train_ds,
+            min_box_area=args.min_box_area,
+            max_train_images=args.max_train_images,
+            max_rescore_images=args.max_rescore_images,
+            neg_patches_per_image=args.neg_patches_per_image,
+            checkpoint_path=args.checkpoint_dir,
+            skip_step1=args.skip_step1,
+            rescorer_checkpoint_every=args.rescorer_checkpoint_every,
         )
         print(f"\nTraining finished in {(time.time() - t0) / 60:.1f} min")
         detector.save(args.model_dir)
         print(f"Model saved -> {args.model_dir}")
+
     use_context = not args.no_context
     print(f"\nEvaluating on test split (use_context={use_context})")
+
     ap_per_class, mean_ap = evaluate_hog_detection_ap(
-        detector = detector,
-        dataset = test_ds,
-        max_imgs = args.eval_max_images,
-        iou_match_thresh = args.eval_iou_match,
-        nms_iou_thresh = args.eval_nms_iou,
-        score_thresh = args.eval_score_thresh,
-        split_name = "Test",
-        pyramid_lambda = args.eval_pyramid_lambda,
-        use_context = use_context,
-        checkpoint_path = args.eval_checkpoint,
-        checkpoint_every = 50,
+        detector=detector,
+        dataset=test_ds,
+        max_imgs=args.eval_max_images,
+        iou_match_thresh=args.eval_iou_match,
+        nms_iou_thresh=args.eval_nms_iou,
+        score_thresh=args.eval_score_thresh,
+        split_name="Test",
+        pyramid_lambda=args.eval_pyramid_lambda,
+        use_context=use_context,
+        checkpoint_path=args.eval_checkpoint,
+        checkpoint_every=50,
     )
+
     print(f"\nTest mAP@0.5 (VOC 11-pt): {mean_ap:.4f}")
     print_results(ap_per_class, mean_ap, VOC_CLASSES)
 

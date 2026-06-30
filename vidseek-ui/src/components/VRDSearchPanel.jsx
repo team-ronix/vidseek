@@ -108,9 +108,9 @@ export function VRDSearchPanel({ onResults, onLoading }) {
           {/* Visual triple hint */}
           <div className="vrd-triple-hint">
             <span className={`triple-slot${subject  ? ' filled' : ''}`}>{subject  || 'Subject'}</span>
-            <span className="triple-sep">→</span>
+            <span className="triple-sep">-></span>
             <span className={`triple-slot${relation ? ' filled' : ''}`}>{relation || 'Relation'}</span>
-            <span className="triple-sep">→</span>
+            <span className="triple-sep">-></span>
             <span className={`triple-slot${object   ? ' filled' : ''}`}>{object   || 'Object'}</span>
           </div>
 

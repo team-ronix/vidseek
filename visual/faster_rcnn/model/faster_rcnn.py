@@ -35,11 +35,11 @@ class FasterRCNN(nn.Module):
 
     def forward(self, images, img_shapes, gt_boxes=None, gt_labels=None):
         img_shape = img_shapes[0]
-        gt_b = gt_boxes[0] if gt_boxes is not None else None
-        gt_l = gt_labels[0] if gt_labels is not None else None
+        gt_b = gt_boxes[0] if gt_boxes != None else None
+        gt_l = gt_labels[0] if gt_labels != None else None
         feat = self.backbone(images)
         props, rpn_cls, rpn_reg = self.rpn(feat, img_shape, gt_b)
-        if self.training:
+        if self.training == True:
             det_cls, det_reg = self.det_head(feat, props, gt_b, gt_l)
             total = rpn_cls + rpn_reg + det_cls + det_reg
             return dict(
@@ -53,7 +53,6 @@ class FasterRCNN(nn.Module):
             cls_sc, bbox_d, props = self.det_head(feat, props)
             return self._post(cls_sc, bbox_d, props, img_shape)
 
-
     def _post(self, cls_sc, bbox_d, props, img_shape):
         probs = F.softmax(cls_sc, 1)
         all_bxs, all_scs, all_lbls = [], [], []
@@ -62,7 +61,8 @@ class FasterRCNN(nn.Module):
             d = bbox_d[:, c*4:(c+1)*4]
             bx = clip_boxes(bbox_trans_inv(props, d), img_shape)
             keep = sc >= self.score_thresh
-            if keep.sum() == 0: continue
+            if keep.sum() == 0:
+                continue
             bx, sc = bx[keep], sc[keep]
             keep2 = nms(bx, sc, self.nms_thresh)
             all_bxs.append(bx[keep2])
@@ -76,7 +76,7 @@ class FasterRCNN(nn.Module):
                 idx = scrs.topk(self.max_dets).indices
                 bxs, scrs, lbls = bxs[idx], scrs[idx], lbls[idx]
         else:
-            bxs = torch.zeros((0,4))
+            bxs = torch.zeros((0, 4))
             scrs = torch.zeros(0)
             lbls = torch.zeros(0, dtype=torch.long)
         return [dict(boxes=bxs, scores=scrs, labels=lbls)]

@@ -38,9 +38,9 @@ class ObjectDetector:
     def _build_results(self, frame):
         pred_boxes, pred_scores, pred_labels = self.detector.detect(
             frame,
-            threshold = self.score_thresh,
-            overlap_threshold = 0.5,
-            use_context = self.use_context,
+            threshold=self.score_thresh,
+            overlap_threshold=0.5,
+            use_context=self.use_context,
         )
         print(f'\nDetections ({len(pred_scores)} found):')
         results = []
@@ -89,10 +89,10 @@ class ObjectDetector:
     def save_inverted_index(self, output_path='object_inverted_index.json'):
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(self.inverted_index, f, indent=2, ensure_ascii=False)
-            
+
     def load_inverted_index(self, input_path='object_inverted_index.json'):
         with open(input_path, 'r', encoding='utf-8') as f:
             self.inverted_index = json.load(f)
-            
+
     def get_inverted_index(self):
         return self.inverted_index

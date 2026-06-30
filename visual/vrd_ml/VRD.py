@@ -37,13 +37,10 @@ class VRD:
             scene = frame_data['scene']
             frame_count = frame_data['frame_count_in_scene']
             frame = frame_data['frame']
-
             print(f"[{i}/{len(self.frames)}] Scene {scene.index}: Start at {scene.start_time:.2f}s, End at {scene.end_time:.2f}s, Duration {scene.duration:.2f}s ({frame_count} frames)")
             print(f"       Processing frame {frame_number}")
-
             if frame_number is None or frame is None:
                 continue
-
             triples = self._build_pred_data(frame, obj_data)
             print(f"       Found {len(triples)} relationships in frame {frame_number}")
             for triple in triples:
@@ -54,10 +51,8 @@ class VRD:
                 statement = f"{subject}, {predicate}, {object_}"
                 if statement not in self.inverted_index:
                     self.inverted_index[statement] = []
-
                 if any(occ['scene'] == scene.index for occ in self.inverted_index[statement]):
                     continue
-
                 self.inverted_index[statement].append({
                     'scene': scene.index,
                     'frame': frame_number,

@@ -37,7 +37,7 @@ def train_rpn_iters(model, loader, device, n_iters, lr, step_name, ckpt_prefix=N
     opt = make_sgd(params, lr)
     model.train()
     start_iter = 0
-    if ckpt_prefix:
+    if ckpt_prefix != None:
         mid_path, mid_iter = _latest_mid_ckpt(ckpt_prefix)
         if mid_path and mid_iter < n_iters:
             print(f'Resuming {step_name} from mid-ckpt iter {mid_iter} ({mid_path})')
@@ -47,7 +47,6 @@ def train_rpn_iters(model, loader, device, n_iters, lr, step_name, ckpt_prefix=N
             print(f'Mid-ckpt at iter {mid_iter} already covers {n_iters} iters - skipping.')
             model.load_state_dict(torch.load(mid_path, map_location=device))
             return
-
     done = start_iter
     pbar = tqdm(total=n_iters, initial=done, desc=f'{step_name} lr={lr}', unit='iter')
     while done < n_iters:
@@ -82,7 +81,7 @@ def train_det_iters(model, rpn_src, loader, device, n_iters, lr, step_name, ckpt
     if not same_model:
         rpn_src.eval()
     start_iter = 0
-    if ckpt_prefix:
+    if ckpt_prefix != None:
         mid_path, mid_iter = _latest_mid_ckpt(ckpt_prefix)
         if mid_path and mid_iter < n_iters:
             print(f'Resuming {step_name} from mid-ckpt iter {mid_iter} ({mid_path})')
@@ -92,7 +91,6 @@ def train_det_iters(model, rpn_src, loader, device, n_iters, lr, step_name, ckpt
             print(f'Mid-ckpt at iter {mid_iter} already covers {n_iters} iters - skipping.')
             model.load_state_dict(torch.load(mid_path, map_location=device))
             return
-
     done = start_iter
     pbar = tqdm(total=n_iters, initial=done, desc=f'{step_name} lr={lr}', unit='iter')
     while done < n_iters:
@@ -102,7 +100,7 @@ def train_det_iters(model, rpn_src, loader, device, n_iters, lr, step_name, ckpt
             imgs = imgs.to(device)
             gt_b = [b.to(device) for b in gt_bl]
             gt_l = [l.to(device) for l in gt_ll]
-            if same_model:
+            if same_model == True:
                 rpn_src.eval()
             with torch.no_grad():
                 fr = rpn_src.backbone(imgs)
@@ -113,9 +111,7 @@ def train_det_iters(model, rpn_src, loader, device, n_iters, lr, step_name, ckpt
                 feat = model.backbone(imgs)
             else:
                 feat = fr
-            dc, dr = model.det_head(
-                feat, props.detach(), gt_b[0], gt_l[0]
-            )
+            dc, dr = model.det_head(feat, props.detach(), gt_b[0], gt_l[0])
             loss = dc + dr
             opt.zero_grad()
             loss.backward()

@@ -1,10 +1,11 @@
 import math
+
 import torch
-from torch import nn
+import torch.nn as nn
 
 
 class PositionalEncoding(nn.Module):
-    # Fixed sinusoidal encoding — not learned, just adds position info to each token.
+    # Fixed sinusoidal encoding - not learned, just adds position info to each token.
     # Even dims use sin, odd dims use cos, each at a different frequency.
 
     def __init__(self, d_model, max_len, dropout=0.1):
@@ -28,3 +29,18 @@ class PositionalEncoding(nn.Module):
     def forward(self, x):
         x = x + self.pe[:x.size(1), :].unsqueeze(0)
         return self.dropout(x)
+
+
+class TransformerEmbedding(nn.Module):
+    # Token embedding + positional encoding, combined before the encoder.
+
+    def __init__(self, vocab_size, d_model, max_len=512, dropout=0.1):
+        super().__init__()
+        self.token_emb = nn.Embedding(vocab_size, d_model, padding_idx=0)
+        self.pos_enc   = PositionalEncoding(d_model, max_len, dropout)
+        self.d_model   = d_model
+
+    def forward(self, x):
+        # scale by sqrt(d_model) as in the paper — keeps token and position signals balanced
+        tok = self.token_emb(x) * math.sqrt(self.d_model)
+        return self.pos_enc(tok)

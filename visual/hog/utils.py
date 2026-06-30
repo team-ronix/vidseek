@@ -1,16 +1,16 @@
 from pathlib import Path
-from typing import Optional, Tuple
 import numpy as np
 import cv2
 
 
-def load_image(src) -> np.ndarray | None:
+def load_image(src):
     if isinstance(src, (str, Path)):
-        return cv2.imread(str(src))
+        img = cv2.imread(str(src))
+        return img
     return src
 
 
-def calculate_iou(boxA, boxB) -> float:
+def calculate_iou(boxA, boxB):
     xA = max(boxA[0], boxB[0])
     yA = max(boxA[1], boxB[1])
     xB = min(boxA[2], boxB[2])
@@ -20,10 +20,11 @@ def calculate_iou(boxA, boxB) -> float:
         return 0.0
     area_a = (boxA[2] - boxA[0]) * (boxA[3] - boxA[1])
     area_b = (boxB[2] - boxB[0]) * (boxB[3] - boxB[1])
-    return inter_area / float(area_a + area_b - inter_area + 1e-6)
+    iou = inter_area / float(area_a + area_b - inter_area + 1e-6)
+    return iou
 
 
-def apply_deltas_batch(boxes: list, all_deltas: np.ndarray, clip_to: Optional[Tuple[int, int]] = None) -> list:
+def apply_deltas_batch(boxes, all_deltas, clip_to=None):
     n = len(boxes)
     if n == 0:
         return boxes
@@ -44,7 +45,7 @@ def apply_deltas_batch(boxes: list, all_deltas: np.ndarray, clip_to: Optional[Tu
     y0s = np.round(gt_cy - 0.5 * gt_h).astype(int)
     x1s = np.round(gt_cx + 0.5 * gt_w).astype(int)
     y1s = np.round(gt_cy + 0.5 * gt_h).astype(int)
-    if clip_to is not None:
+    if clip_to != None:
         img_w, img_h = clip_to
         x0s = np.clip(x0s, 0, img_w - 1)
         y0s = np.clip(y0s, 0, img_h - 1)
@@ -53,7 +54,7 @@ def apply_deltas_batch(boxes: list, all_deltas: np.ndarray, clip_to: Optional[Tu
     valid = (x1s > x0s) & (y1s > y0s)
     result = []
     for i in range(n):
-        if valid[i]:
+        if valid[i] == True:
             result.append((int(x0s[i]), int(y0s[i]), int(x1s[i]), int(y1s[i])))
         else:
             result.append(boxes[i])
