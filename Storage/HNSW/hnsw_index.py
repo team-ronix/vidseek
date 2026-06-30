@@ -27,8 +27,9 @@ class HNSWIndex:
 
         self._lock= threading.Lock()
         self._dirty = False
-
-        self._vec_buf: list[np.ndarray] = []
+        self._mm: np.memmap | None = None
+        self._count: int = 0
+        self._capacity: int = 0
 
         self._neighbors: list[list[set[int]]] = []
         self._levels: list[int] = []
@@ -50,9 +51,12 @@ class HNSWIndex:
                 self._load_graph()
             n = len(self._levels)
             if n > 0 and self.vectors_path.exists():
-                raw = np.fromfile(str(self.vectors_path), dtype=np.float32)
-                mat = raw.reshape(n, self._metadata["dimension"])
-                self._vec_buf = [mat[i].copy() for i in range(n)]
+                dim = int(self._metadata["dimension"])
+                self._mm = np.memmap(
+                    str(self.vectors_path), dtype=np.float32, mode="r+", shape=(n, dim)
+                )
+                self._capacity = n
+                self._count = n
             self._metadata["vector_count"] = n
         else:
             dim = int(dimension) if dimension is not None else 384
@@ -87,17 +91,35 @@ class HNSWIndex:
         self._entry_point = entry_point
         self._max_layer = max(levels) if levels else -1
 
+    def _ensure_capacity(self, needed: int) -> None:
+        """Make room for at least ``needed`` rows,growing the memmap file."""
+        if self._mm is not None and needed <= self._capacity:
+            return
+        dim = self.dimension
+        if self._mm is None:
+            cap = max(needed, 1024)
+            self._mm = np.memmap(
+                str(self.vectors_path), dtype=np.float32, mode="w+", shape=(cap, dim)
+            )
+            self._capacity = cap
+            return
+        cap = max(needed, self._capacity * 2)
+        self._mm.flush()
+        self._mm._mmap.close() # type: ignore
+        self._mm = None
+        self._mm = np.memmap(
+            str(self.vectors_path), dtype=np.float32, mode="r+", shape=(cap, dim)
+        )
+        self._capacity = cap
+
     def save(self) -> None:
-        """Atomically write all vectors and the graph to disk."""
+        """Flush vectors (memmap) and atomically write the graph to disk."""
         with self._lock:
-            if self._vec_buf:
-                arr = np.stack(self._vec_buf).astype(np.float32)
-                tmp_vec = self.root_dir / "vectors.tmp.dat"
-                arr.tofile(str(tmp_vec))
-                self._atomic_replace(tmp_vec, self.vectors_path)
+            if self._mm is not None:
+                self._mm.flush()
 
             self._save_graph()
-            self._metadata["vector_count"] = len(self._vec_buf)
+            self._metadata["vector_count"] = self._count
             self._save_metadata()
             self._dirty = False
 
@@ -123,21 +145,20 @@ class HNSWIndex:
 
         tmp = self.root_dir / "graph.tmp.npz"
         np.savez_compressed(str(tmp), **data)
-        self._atomic_replace(tmp, self.graph_path)
+        self._replace(tmp, self.graph_path)
 
     def _save_metadata(self) -> None:
         tmp = self.metadata.with_suffix(".tmp")
         tmp.write_text(json.dumps(self._metadata, ensure_ascii=True))
-        self._atomic_replace(tmp, self.metadata)
+        self._replace(tmp, self.metadata)
 
-    def _atomic_replace(self,src: Path, dst: Path) -> None:
+    def _replace(self,src: Path, dst: Path) -> None:
         for attempt in range(10):
             try:
                 os.replace(src, dst)
                 return
             except PermissionError:
                 time.sleep(0.01 * (attempt + 1))
-        os.replace(src, dst)
 
     def __enter__(self):
         return self
@@ -152,7 +173,7 @@ class HNSWIndex:
 
     @property
     def vector_count(self) -> int:
-        return len(self._vec_buf)
+        return self._count
 
     def _normalize(self, x: np.ndarray) -> np.ndarray:
         norm = np.linalg.norm(x)
@@ -164,13 +185,11 @@ class HNSWIndex:
     def _search_layer(
         self,query: np.ndarray,
         entry_points: list[int],
-        ef: int,
-        layer:int
+        ef:int,
+
+        layer:  int
     ) -> list[tuple[float, int]]:
-        """
-        Beam search on a single layer.
-        Returns up to ``ef`` (cosine_distance, node_id) pairs, best first.
-        """
+        assert self._mm is not None 
         visited = set(entry_points)
 
         #min-heap of (dist, id) - pop the closest first
@@ -179,7 +198,7 @@ class HNSWIndex:
         results:    list[tuple[float, int]] = []
 
         for ep in entry_points:
-            d = 1.0 - float(self._vec_buf[ep] @ query)
+            d = 1.0 - float(self._mm[ep] @ query)
             heapq.heappush(candidates, (d, ep))
             heapq.heappush(results, (-d, ep))
 
@@ -193,7 +212,7 @@ class HNSWIndex:
                 if neighbor in visited:
                     continue
                 visited.add(neighbor)
-                d = 1.0 -float(self._vec_buf[neighbor] @ query)
+                d = 1.0 -float(self._mm[neighbor] @ query)
                 if d < -results[0][0] or len(results)< ef:
                     heapq.heappush(candidates,(d, neighbor))
                     heapq.heappush(results, (-d, neighbor))
@@ -203,16 +222,17 @@ class HNSWIndex:
         return sorted((-nd, node_id) for nd, node_id in results)
 
     def _select_neighbors(self,candidates:list[tuple[float, int]],M:int) -> list[int]:
+        assert self._mm is not None
         selected:list[tuple[float, int]] =[]
         pruned:list[tuple[float, int]]= []
 
         for dist, cand in candidates:
             if len(selected) >= M:
                 break
-            cand_vec = self._vec_buf[cand]
+            cand_vec = self._mm[cand]
             keep = True
             for _, s in selected:
-                if (1.0-float(cand_vec @ self._vec_buf[s])) < dist:
+                if (1.0-float(cand_vec @ self._mm[s])) < dist:
                     keep = False
                     break
             if keep:
@@ -234,16 +254,19 @@ class HNSWIndex:
             raise ValueError("Vector must be 1-D")
 
         with self._lock:
-            if self._vec_buf and vec.shape[0] != self.dimension:
+            if self._count and vec.shape[0] != self.dimension:
                 raise ValueError(
                     f"Dimension mismatch: expected {self.dimension}, got {vec.shape[0]}"
                 )
-            if not self._vec_buf:
-                self._metadata["dimension"] = int(vec.shape[0]) 
+            if not self._count:
+                self._metadata["dimension"] = int(vec.shape[0])
 
-            vec = self._normalize(vec) 
-            node_id =len(self._vec_buf)
-            self._vec_buf.append(vec) 
+            vec = self._normalize(vec)
+            node_id = self._count
+            self._ensure_capacity(node_id + 1)
+            assert self._mm is not None
+            self._mm[node_id] = vec
+            self._count += 1
 
             level = self._random_level()
             self._levels.append(level)
@@ -255,6 +278,7 @@ class HNSWIndex:
 
     def _link_node(self, node_id: int, vec: np.ndarray, level: int) -> None:
         """Wire a newly appended node into the in-RAM graph."""
+        assert self._mm is not None
         if self._entry_point == -1:
             self._entry_point =node_id 
             self._max_layer = level
@@ -278,8 +302,8 @@ class HNSWIndex:
             for neighbor in chosen:
                 self._neighbors[neighbor][currLevel].add(node_id)
                 if len(self._neighbors[neighbor][currLevel]) > M_cap:
-                    neighbor_vec =self._vec_buf[neighbor]
-                    scored = sorted((1.0 - float(self._vec_buf[n] @ neighbor_vec), n)
+                    neighbor_vec =self._mm[neighbor]
+                    scored = sorted((1.0 - float(self._mm[n] @ neighbor_vec), n)
                         for n in self._neighbors[neighbor][currLevel]
                     )
                     kept=self._select_neighbors(scored, M_cap)
@@ -292,7 +316,7 @@ class HNSWIndex:
             self._max_layer= level
 
     def query(self,vector: np.ndarray,top_k: int = 5,ef:int | None = None) -> list[tuple[int, float]]:
-        if top_k <= 0 or not self._vec_buf or self._entry_point == -1:
+        if top_k <= 0 or not self._count or self._entry_point == -1:
             return []
         if ef is None:
             ef = max(top_k, 50)
