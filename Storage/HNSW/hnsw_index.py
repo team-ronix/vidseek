@@ -160,13 +160,6 @@ class HNSWIndex:
             except PermissionError:
                 time.sleep(0.01 * (attempt + 1))
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *_):
-        if self._dirty:
-            self.save()
-
     @property
     def dimension(self) -> int:
         return int(self._metadata["dimension"])
