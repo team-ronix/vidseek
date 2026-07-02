@@ -45,9 +45,7 @@ class Transformer(nn.Module):
         attention_mask: Optional[torch.Tensor] = None,    # (B, T)
         normalize: bool = True,
     ) -> torch.Tensor:                                    # (B, d_model)
-        # if no mask provided, treat all non-zero tokens as real
-        if attention_mask is None:
-            attention_mask = (input_ids != 0).long()
+
 
         # expand mask for multi-head attention: (B, 1, 1, T)
         src_mask = attention_mask.unsqueeze(1).unsqueeze(2)

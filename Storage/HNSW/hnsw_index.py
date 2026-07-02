@@ -70,7 +70,7 @@ class HNSWIndex:
             self._save_metadata()
 
     def _load_graph(self) -> None:
-        data = np.load(str(self.graph_path), allow_pickle=False)
+        data = np.load(str(self.graph_path))
         
         levels = data["levels"].tolist()
         entry_point = int(data["entry_point"][0])
