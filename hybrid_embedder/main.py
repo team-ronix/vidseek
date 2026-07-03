@@ -1,6 +1,10 @@
 import numpy as np
-from lsa_encoder import LSAEncoder
-from bm25_encoder import BM25Encoder
+try:
+    from .lsa_encoder import LSAEncoder
+    from .bm25_encoder import BM25Encoder
+except ImportError:
+    from lsa_encoder import LSAEncoder
+    from bm25_encoder import BM25Encoder
 
 
 class HybridEmbedder:

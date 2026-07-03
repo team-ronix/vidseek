@@ -1,4 +1,4 @@
-const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+﻿const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export function getVideoStreamUrl(path) {
   return `${BASE}/video/stream?path=${encodeURIComponent(path)}`;
@@ -10,16 +10,16 @@ async function request(url) {
   return res.json();
 }
 
-// ── Text search (ChromaDB: OCR + transcript) ──────────────────
-export async function searchVideos(query, topK = 20) {
-  return request(`/search?q=${encodeURIComponent(query)}&top_k=${topK}`);
+// â”€â”€ Text search (ChromaDB: OCR + transcript) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+export async function searchVideos(query, topK = 20, model = 'transformer') {
+  return request(`/search/transcript?q=${encodeURIComponent(query)}&top_k=${topK}&model=${model}`);
 }
 
 export async function searchByOCR(query) {
   return request(`/search/ocr?q=${encodeURIComponent(query)}`);
 }
 
-// ── Structured search ─────────────────────────────────────────
+// â”€â”€ Structured search â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export async function searchByObject(objectKey) {
   return request(`/search/object?key=${encodeURIComponent(objectKey)}`);
 }
@@ -32,7 +32,7 @@ export async function searchByVRD({ subject, object, relation }) {
   return request(`/search/vrd?${params}`);
 }
 
-// ── Dropdown population ───────────────────────────────────────
+// â”€â”€ Dropdown population â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export async function getAllObjects() {
   return request('/objects');            // [{ id, key }]
 }
@@ -41,16 +41,19 @@ export async function getAllVRDOptions() {
   return request('/vrd/options');        // { subjects, relations, objects }
 }
 
-// ── Upload + job polling ──────────────────────────────────────
+// â”€â”€ Upload + job polling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export async function getJobStatus(jobId) {
   return request(`/jobs/${jobId}`);
 }
 
-export function uploadVideo(file, onProgress) {
+export function uploadVideo(file, onProgress, options = {}) {
   return new Promise((resolve, reject) => {
     const xhr  = new XMLHttpRequest();
     const form = new FormData();
     form.append('file', file);
+    if (options.detector)   form.append('detector',   options.detector);
+    if (options.recognizer) form.append('recognizer', options.recognizer);
+    if (options.object_detector) form.append('object_detector', options.object_detector);
     xhr.upload.addEventListener('progress', e => {
       if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
     });
@@ -63,3 +66,9 @@ export function uploadVideo(file, onProgress) {
     xhr.send(form);
   });
 }
+
+// -- Chapters ------------------------------------------
+export async function getChapters(videoPath) {
+  return request(`/videos/chapters?path=${encodeURIComponent(videoPath)}`);
+}
+

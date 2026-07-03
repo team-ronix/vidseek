@@ -8,7 +8,7 @@ from visual.SceneSegmenter import SceneSegmenter
 from OCR.src.OCR import OCR
 from audio.ASR import ASR
 from visual.faster_rcnn.ObjectDetector import ObjectDetector
-from visual.VRD import VRD
+from visual.vrd_ml.VRD import VRD
 from audio.SentenceSegmenter import SentenceSegmentation
 from Transformer import Transformer
 from Storage.CustomVectorStore import CustomVectorStore
@@ -81,7 +81,7 @@ def run(args):
     # Object detection -> Postgres
     print("\nObject detection processing...")
     object_detector = ObjectDetector(video_path, frames)
-    object_detector.detect_objects()
+    objects = object_detector.detect_objects()
     object_index_path = os.path.join(json_folder, args.object_output_path)
     object_detector.save_inverted_index(object_index_path)
     object_inverted_index = object_detector.get_inverted_index()
@@ -97,7 +97,7 @@ def run(args):
 
     # VRD -> Postgres
     print("\nVisual relationship detection processing...")
-    vrd_processor = VRD(frames=frames, video_path=video_path, api_key=os.getenv("GEMINI_TOKEN"))
+    vrd_processor = VRD(frames=frames, video_path=video_path, objects=objects)
     vrd_processor.detect_relationships()
     vrd_index_path = os.path.join(json_folder, args.vrd_output_path)
     vrd_processor.save_inverted_index(vrd_index_path)
@@ -140,8 +140,8 @@ def run(args):
     gc.collect()
 
 
-    print("\nEmbedding OCR and transcript results...")
-    transformer = Transformer(ocr_inverted_index, transcript_segments)
+    print("\nEmbedding transcript results...")
+    transformer = Transformer(transcript_segments)
     transformer.transform()
     hnsw_store = HNSWVectorStore()
     transformer.save_embeddings(hnsw_store)

@@ -4,14 +4,14 @@ from visual.faster_rcnn.voc_dataset import VOC_CLASSES
 
 
 def _iou_one(box, boxes):
-    x1 = torch.max(box[0], boxes[:,0]) 
-    y1 = torch.max(box[1], boxes[:,1])
-    x2 = torch.min(box[2], boxes[:,2]) 
-    y2 = torch.min(box[3], boxes[:,3])
-    inter = (x2-x1).clamp(0)*(y2-y1).clamp(0)
-    ab = (box[2]-box[0])*(box[3]-box[1])
-    bs = (boxes[:,2]-boxes[:,0])*(boxes[:,3]-boxes[:,1])
-    return inter/(ab+bs-inter+1e-8)
+    x1 = torch.max(box[0], boxes[:, 0])
+    y1 = torch.max(box[1], boxes[:, 1])
+    x2 = torch.min(box[2], boxes[:, 2])
+    y2 = torch.min(box[3], boxes[:, 3])
+    inter = (x2 - x1).clamp(0) * (y2 - y1).clamp(0)
+    ab = (box[2] - box[0]) * (box[3] - box[1])
+    bs = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
+    return inter / (ab + bs - inter + 1e-8)
 
 
 class VOCEvaluator:
@@ -27,9 +27,8 @@ class VOCEvaluator:
     def update(self, img_id, pred_boxes, pred_scores, pred_labels, gt_boxes, gt_labels, gt_difficult=None):
         for c in range(1, self.num_classes+1):
             m = gt_labels == c
-            boxes = gt_boxes[m] if m.any() else torch.zeros((0,4))
-            # store difficult flags alongside boxes
-            if gt_difficult is not None and m.any():
+            boxes = gt_boxes[m] if m.any() else torch.zeros((0, 4))
+            if gt_difficult != None and m.any():
                 diff = gt_difficult[m]
             else:
                 diff = torch.zeros(boxes.shape[0], dtype=torch.bool)
@@ -40,16 +39,12 @@ class VOCEvaluator:
 
     def compute_map(self):
         aps = {}
-        for c in range(1, self.num_classes+1):
+        for c in range(1, self.num_classes + 1):
             aps[VOC_CLASSES[c-1]] = self._ap(c)
         mAP = np.mean(list(aps.values()))
         return mAP, aps
 
     def _ap(self, c):
-        # A predicted box is TP if:
-        #   Predicted class is correct
-        #   IoU with a ground-truth box is above threshold
-        #   That ground-truth object was not already matched by another prediction
         dets = sorted(self.dets.get(c, []), key=lambda x: -x[1])
         n_gt = sum(
             (~diff).sum().item()
@@ -57,7 +52,6 @@ class VOCEvaluator:
         )
         if not dets or n_gt == 0:
             return 0.0
-
         matched = defaultdict(set)
         tp = np.zeros(len(dets))
         fp = np.zeros(len(dets))
@@ -70,20 +64,17 @@ class VOCEvaluator:
             if len(gt) == 0:
                 fp[i] = 1
                 continue
-
             ious = _iou_one(box, gt)
             best_iou, best_j = ious.max(0)
             best_j = best_j.item()
-
             if best_iou >= self.iou_thresh and best_j not in matched[img_id]:
-                if diff[best_j]:
+                if diff[best_j] == True:
                     pass
                 else:
                     tp[i] = 1
                     matched[img_id].add(best_j)
             else:
                 fp[i] = 1
-
         tp_c = np.cumsum(tp)
         fp_c = np.cumsum(fp)
         rec = tp_c / (n_gt + 1e-8)

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Float, ForeignKey, Integer
+from sqlalchemy import Column, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 from Storage.SQL.Models.Base import Base
 
@@ -11,6 +11,7 @@ class ObjectVideo(Base):
     start_time = Column(Float)
     end_time = Column(Float)
     frame_time = Column(Float)
+    model_name = Column(String, nullable=True)
 
     object = relationship("Object", back_populates="object_videos", overlaps="objects,videos")
     video = relationship("Video", back_populates="object_videos", overlaps="objects,videos")

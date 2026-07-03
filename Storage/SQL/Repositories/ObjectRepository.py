@@ -40,7 +40,8 @@ class ObjectRepository:
                         video_id=video_id,
                         start_time=occ.get("start_time"),
                         end_time=occ.get("end_time"),
-                        frame_time = occ.get("frame_time")
+                        frame_time = occ.get("frame_time"),
+                        model_name=occ.get("model_name")
                     ))
             self.db.commit()
         except Exception:
@@ -68,6 +69,7 @@ class ObjectRepository:
                 "start_time": ov.start_time,
                 "frame_time" : ov.frame_time,
                 "end_time":   ov.end_time,
+                "model_name": ov.model_name
             }
             for ov, obj, video in rows
         ]

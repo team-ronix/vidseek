@@ -1,6 +1,6 @@
 import torch
 
-def bbox_transform(anchors, gt):
+def bbox_trans(anchors, gt):
     wa = anchors[:,2] - anchors[:,0]
     ha = anchors[:,3] - anchors[:,1]
     xa = anchors[:,0] + .5*wa
@@ -15,14 +15,14 @@ def bbox_transform(anchors, gt):
     th = torch.log(h / (ha + 1e-8) + 1e-8)
     return torch.stack([tx, ty, tw, th], 1)
 
-def bbox_transform_inv(anchors, deltas):
-    wa = anchors[:,2] - anchors[:,0]
-    ha = anchors[:,3] - anchors[:,1]
-    xa = anchors[:,0] + .5*wa
-    ya = anchors[:,1] + .5*ha
-    tx, ty = deltas[:,0], deltas[:,1]
-    tw = deltas[:,2].clamp(max=4.)
-    th = deltas[:,3].clamp(max=4.)
+def bbox_trans_inv(anchors, deltas):
+    wa = anchors[:, 2] - anchors[:, 0]
+    ha = anchors[:, 3] - anchors[:, 1]
+    xa = anchors[:, 0] + .5*wa
+    ya = anchors[:, 1] + .5*ha
+    tx, ty = deltas[:, 0], deltas[:, 1]
+    tw = deltas[:, 2].clamp(max=4.)
+    th = deltas[:, 3].clamp(max=4.)
     x = tx*wa + xa
     y = ty*ha + ya
     w = torch.exp(tw)*wa
@@ -32,8 +32,6 @@ def bbox_transform_inv(anchors, deltas):
 
 
 def iou_matrix(a, b):
-    # a: (N,4), b: (M,4) -> (N,M)
-    # compare each box in a to each box in b, return IoU
     ix1 = torch.max(a[:,0].unsqueeze(1), b[:,0].unsqueeze(0))
     iy1 = torch.max(a[:,1].unsqueeze(1), b[:,1].unsqueeze(0))
     ix2 = torch.min(a[:,2].unsqueeze(1), b[:,2].unsqueeze(0))
@@ -46,12 +44,12 @@ def iou_matrix(a, b):
 
 def clip_boxes(boxes, img_shape):
     H, W = img_shape
-    boxes[:,0::2] = boxes[:,0::2].clamp(0, W)
-    boxes[:,1::2] = boxes[:,1::2].clamp(0, H)
+    boxes[:, 0::2] = boxes[:, 0::2].clamp(0, W)
+    boxes[:, 1::2] = boxes[:, 1::2].clamp(0, H)
     return boxes
 def filter_boxes(boxes, min_size):
-    w = boxes[:,2] - boxes[:,0]
-    h = boxes[:,3] - boxes[:,1]
+    w = boxes[:, 2] - boxes[:, 0]
+    h = boxes[:, 3] - boxes[:, 1]
     return (w >= min_size) & (h >= min_size)
 
 
@@ -63,7 +61,8 @@ def nms(boxes, scores, thresh):
     while order.numel():
         i = order[0].item()
         keep.append(i)
-        if order.numel() == 1: break
+        if order.numel() == 1:
+            break
         rest = order[1:]
         ious = iou_matrix(boxes[i].unsqueeze(0), boxes[rest])[0]
         order = rest[ious <= thresh]

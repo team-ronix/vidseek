@@ -10,35 +10,35 @@ _TRANSFORMER_DIR = Path(__file__).resolve().parent / "Transformer"
 if str(_TRANSFORMER_DIR) not in sys.path:
     sys.path.insert(0, str(_TRANSFORMER_DIR))
 
-from models.model.transformer import Transformer as TransformerModel  # type: ignore
+from models import Transformer as TransformerModel  # type: ignore
 from data import _make_ids  # type: ignore
 
-_MODEL_DIR = _TRANSFORMER_DIR / "result_triplet"
+_VOCAB_PATH  = _TRANSFORMER_DIR / "results" / "allnli_specter" / "vocab.pkl"
+_MODEL_PATH  = _TRANSFORMER_DIR / "results" / "allnli_specter" / "best_model.pt"
 _DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 _MAX_LEN = 128
 
 
 class Transformer:
-    def __init__(self, ocr_results, transcripts):
-        self.ocr_results = ocr_results
+    def __init__(self, transcripts):
         self.transcripts = transcripts
         self.embeddings = []
         self.metadata = []
 
-        with open(_MODEL_DIR / "vocab.pkl", "rb") as vf:
+        with open(_VOCAB_PATH, "rb") as vf:
             self._vocab = pickle.load(vf)
 
         self._model = TransformerModel(
             vocab_size=len(self._vocab),
-            d_model=256,
-            n_layers=4,
-            n_heads=4,
-            d_ff=512,
+            d_model=384,
+            n_layers=6,
+            n_heads=6,
+            d_ff=1536,
             max_len=_MAX_LEN,
             pooling="mean",
         ).to(_DEVICE)
         self._model.load_state_dict(
-            torch.load(_MODEL_DIR / "final_hard_tuned_model.pt", map_location=_DEVICE)
+            torch.load(_MODEL_PATH, map_location=_DEVICE, weights_only=True)
         )
         self._model.eval()
 
@@ -50,17 +50,6 @@ class Transformer:
         return emb[0]  # (d_model,)
 
     def transform(self):
-        for key, occurrences in self.ocr_results.items():
-            embedding = self._encode(key)
-            for occ in occurrences:
-                self.embeddings.append(embedding)
-                self.metadata.append({
-                    'type': 'ocr',
-                    'text': key,
-                    'video_path': occ['video_path'],
-                    'start_time': occ['start_time'],
-                    'end_time': occ['end_time']
-                })
         for item in self.transcripts:
             self.embeddings.append(self._encode(item['text']))
             self.metadata.append({

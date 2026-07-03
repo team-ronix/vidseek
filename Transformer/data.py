@@ -8,9 +8,9 @@ from torch.nn.utils.rnn import pad_sequence
 import pandas as pd
 
 
-
-
 class Vocabulary:
+    # maps words <-> integer ids
+    # special tokens: PAD=0, UNK=1, CLS=2, SEP=3
     PAD_TOKEN = "<pad>"
     UNK_TOKEN = "<unk>"
     CLS_TOKEN = "[CLS]"
@@ -33,6 +33,7 @@ class Vocabulary:
 
     @staticmethod
     def tokenize(text):
+        # lowercase, strip punctuation, split on whitespace
         if text is None or (isinstance(text, float) and pd.isna(text)):
             return []
         text = str(text).lower().strip()
@@ -40,6 +41,7 @@ class Vocabulary:
         return text.split()
 
     def build(self, sentences):
+        # count all words, then add those that appear at least min_freq times
         counter = Counter()
         for sent in sentences:
             counter.update(self.tokenize(sent))
@@ -50,6 +52,7 @@ class Vocabulary:
                 self.idx2word[idx] = word
 
     def encode(self, sentence: str):
+        # convert sentence -> list of token ids, unknown words -> UNK id
         tokens = self.tokenize(sentence)
         if not tokens:
             return [self.word2idx[self.UNK_TOKEN]]
@@ -59,132 +62,58 @@ class Vocabulary:
         return len(self.word2idx)
 
 
-# ── helper ────────────────────────────────────────────────────────────────────
+#  helpers 
 
-def _make_ids(sentence: str, vocab: Vocabulary, max_len: int):
+def _make_ids(sentence: str, vocab: Vocabulary, max_len: int) -> list:
+    # encode a sentence and wrap with [CLS] . .  [SEP], truncated to max_len
     cls_id = vocab.word2idx[vocab.CLS_TOKEN]
     sep_id = vocab.word2idx[vocab.SEP_TOKEN]
     body   = vocab.encode(sentence)[: max_len - 2]
     return [cls_id] + body + [sep_id]
 
 
-#  AllNLI datasets 
-
-class AllNLIDataset(Dataset):
-    """(anchor, positive) pairs from AllNLI.jsonl for MNR training.
-
-    Each line: [anchor, positive, negative] — the explicit negative is
-    discarded here because MNR uses every other positive in the batch as
-    a negative for free, giving B-1 negatives per anchor per step.
-    """
-
-    def __init__(self, path: str, vocab: Vocabulary, max_len: int = 128):
-        self.pairs = []
-        df = pd.read_csv(path)
-        for _, row in df.iterrows():
-            self.pairs.append((
-                _make_ids(str(row["anchor"]),   vocab, max_len),
-                _make_ids(str(row["positive"]), vocab, max_len),
-            ))
-
-    def __len__(self):
-        return len(self.pairs)
-
-    def __getitem__(self, idx):
-        ids_a, ids_p = self.pairs[idx]
-        return (
-            torch.tensor(ids_a, dtype=torch.long),
-            torch.tensor(ids_p, dtype=torch.long),
-        )
+def _pad_and_mask(*seq_lists):
+    # pad each group of sequences and compute their attention masks
+    padded = [pad_sequence(list(seqs), batch_first=True, padding_value=0) for seqs in seq_lists]
+    masks  = [(p != 0).long() for p in padded]
+    return padded, masks
 
 
-class AllNLITripletDataset(Dataset):
-    """(anchor, positive, negative) triplets from AllNLI.jsonl for Triplet training.
+#  datasets
 
-    AllNLI provides explicit NLI-derived negatives (contradictions), which are
-    semantically hard by construction — far stronger than randomly sampled ones.
-    """
+class PairDataset(Dataset):
+    # Loads (anchor, positive) pairs from any CSV with "anchor" and "positive" columns.
 
     def __init__(self, path: str, vocab: Vocabulary, max_len: int = 128):
-        self.triplets = []
+        encode = lambda s: _make_ids(str(s), vocab, max_len)
         df = pd.read_csv(path)
-        for _, row in df.iterrows():
-            self.triplets.append((
-                _make_ids(str(row["anchor"]),   vocab, max_len),
-                _make_ids(str(row["positive"]), vocab, max_len),
-                _make_ids(str(row["negative"]), vocab, max_len),
-            ))
+        self.samples = [
+            (encode(a), encode(p))
+            for a, p in zip(df["anchor"], df["positive"])
+        ]
 
     def __len__(self):
-        return len(self.triplets)
+        return len(self.samples)
 
     def __getitem__(self, idx):
-        ids_a, ids_p, ids_n = self.triplets[idx]
-        return (
-            torch.tensor(ids_a, dtype=torch.long),
-            torch.tensor(ids_p, dtype=torch.long),
-            torch.tensor(ids_n, dtype=torch.long),
-        )
+        return tuple(torch.tensor(ids, dtype=torch.long) for ids in self.samples[idx])
 
-
-#  AllNLI labeled-pair dataset (for Contrastive / CoSENT / CosineMSE)
-
-class AllNLILabeledPairDataset(Dataset):
-    """Creates (sent_a, sent_b, label) pairs from AllNLI.
-
-    Each row contributes two samples:
-        (anchor, positive) → label 1.0
-        (anchor, negative) → label 0.0
-
-    Used by ContrastiveLoss, CoSENTLoss, and CosineMSELoss which all expect
-    a scalar label / score alongside the two sentence embeddings.
-    """
-
-    def __init__(self, path: str, vocab: Vocabulary, max_len: int = 128):
-        self.pairs = []
-        df = pd.read_csv(path)
-        for _, row in df.iterrows():
-            anchor   = _make_ids(str(row["anchor"]),   vocab, max_len)
-            positive = _make_ids(str(row["positive"]), vocab, max_len)
-            negative = _make_ids(str(row["negative"]), vocab, max_len)
-            self.pairs.append((anchor, positive, 1.0))
-            self.pairs.append((anchor, negative, 0.0))
-
-    def __len__(self):
-        return len(self.pairs)
-
-    def __getitem__(self, idx):
-        ids_a, ids_b, label = self.pairs[idx]
-        return (
-            torch.tensor(ids_a, dtype=torch.long),
-            torch.tensor(ids_b, dtype=torch.long),
-            torch.tensor(label, dtype=torch.float),
-        )
-
-
-#  STS evaluation dataset
 
 class STSDataset(Dataset):
-    """Sentence pairs with similarity scores for Spearman evaluation.
+    # Sentence pairs with similarity scores for evaluation.
+    # Normalizes scores from [0,5] or [0,1] -> [-1,1] to match cosine similarity range.
 
-    Handles both [0, 5] and [0, 1] score scales; normalises to [-1, 1]
-    to match the cosine similarity range.
-    """
-
-    def __init__(self, df: pd.DataFrame, vocab: Vocabulary, max_len: int = 128):
+    def __init__(self, path: str, vocab: Vocabulary, max_len: int = 128):
+        encode = lambda s: _make_ids(str(s) if pd.notna(s) else "", vocab, max_len)
+        df = pd.read_csv(path)
         self.pairs = []
         for _, row in df.iterrows():
-            s1 = str(row["sentence1"]) if pd.notna(row["sentence1"]) else ""
-            s2 = str(row["sentence2"]) if pd.notna(row["sentence2"]) else ""
-
-            ids_a = _make_ids(s1, vocab, max_len)
-            ids_b = _make_ids(s2, vocab, max_len)
-
+            ids_a = encode(row["sentence1"])
+            ids_b = encode(row["sentence2"])
             score = float(row["score"]) if pd.notna(row["score"]) else 0.0
             if score > 1.0:
-                score = score / 5.0       # [0, 5] → [0, 1]
-            score = score * 2.0 - 1.0    # [0, 1] → [-1, 1]
-
+                score = score / 5.0       # [0, 5] -> [0, 1]
+            score = score * 2.0 - 1.0    # [0, 1] -> [-1, 1]
             self.pairs.append((ids_a, ids_b, score))
 
     def __len__(self):
@@ -201,67 +130,33 @@ class STSDataset(Dataset):
 
 #  collate functions 
 
-def collate_fn(batch):
-    """STSDataset → (ids_a, ids_b, mask_a, mask_b, scores)."""
-    seqs_a, seqs_b, scores = zip(*batch)
-    padded_a = pad_sequence(list(seqs_a), batch_first=True, padding_value=0)
-    padded_b = pad_sequence(list(seqs_b), batch_first=True, padding_value=0)
-    return (
-        padded_a, padded_b,
-        (padded_a != 0).long(), (padded_b != 0).long(),
-        torch.stack(scores),
-    )
-
-
-def collate_pair_fn(batch):
-    """AllNLIDataset → (ids_a, ids_b, mask_a, mask_b)."""
+def collate_pair(batch):
+    # AllNLIDataset (pair) -> (ids_a, ids_b, mask_a, mask_b)
     seqs_a, seqs_b = zip(*batch)
-    padded_a = pad_sequence(list(seqs_a), batch_first=True, padding_value=0)
-    padded_b = pad_sequence(list(seqs_b), batch_first=True, padding_value=0)
-    return (
-        padded_a, padded_b,
-        (padded_a != 0).long(), (padded_b != 0).long(),
-    )
+    padded, masks = _pad_and_mask(seqs_a, seqs_b)
+    return (*padded, *masks)
 
 
-def collate_labeled_fn(batch):
-    """AllNLILabeledPairDataset → (ids_a, ids_b, mask_a, mask_b, labels)."""
-    seqs_a, seqs_b, labels = zip(*batch)
-    padded_a = pad_sequence(list(seqs_a), batch_first=True, padding_value=0)
-    padded_b = pad_sequence(list(seqs_b), batch_first=True, padding_value=0)
-    return (
-        padded_a, padded_b,
-        (padded_a != 0).long(), (padded_b != 0).long(),
-        torch.stack(labels),
-    )
-
-
-def collate_triplet_fn(batch):
-    """AllNLITripletDataset → (ids_a, ids_p, ids_n, mask_a, mask_p, mask_n)."""
-    seqs_a, seqs_p, seqs_n = zip(*batch)
-    padded_a = pad_sequence(list(seqs_a), batch_first=True, padding_value=0)
-    padded_p = pad_sequence(list(seqs_p), batch_first=True, padding_value=0)
-    padded_n = pad_sequence(list(seqs_n), batch_first=True, padding_value=0)
-    return (
-        padded_a, padded_p, padded_n,
-        (padded_a != 0).long(), (padded_p != 0).long(), (padded_n != 0).long(),
-    )
+def collate_sts(batch):
+    # STSDataset -> (ids_a, ids_b, mask_a, mask_b, scores)
+    seqs_a, seqs_b, scores = zip(*batch)
+    padded, masks = _pad_and_mask(seqs_a, seqs_b)
+    return (*padded, *masks, torch.stack(scores))
 
 
 #  DataLoader factories 
 
-def build_vocab_from_allnli(path: str, min_freq: int = 2) -> Vocabulary:
-    """Build vocabulary from all sentences (anchor + positive + negative) in AllNLI.csv."""
+def build_vocab(path: str, min_freq: int = 2) -> Vocabulary:
+    # build vocabulary from all sentences (anchor + positive + negative) in the CSV
     vocab = Vocabulary(min_freq=min_freq)
     df = pd.read_csv(path)
-    sentences = (
-        df["anchor"].tolist() + df["positive"].tolist() + df["negative"].tolist()
-    )
+    # include negatives so their tokens stay in vocab even though we don't train on them
+    sentences = df["anchor"].tolist() + df["positive"].tolist() + df["negative"].tolist()
     vocab.build(sentences)
     return vocab
 
 
-def get_allnli_pair_loader(
+def get_pair_loader(
     path: str,
     vocab: Vocabulary,
     batch_size: int = 64,
@@ -269,45 +164,11 @@ def get_allnli_pair_loader(
     num_workers: int = 0,
     pin_memory: bool = False,
 ) -> DataLoader:
-    """DataLoader for MNR training — (anchor, positive) pairs from AllNLI."""
+    # DataLoader for MNR training - (anchor, positive) pairs
     return DataLoader(
-        AllNLIDataset(path, vocab, max_len),
+        PairDataset(path, vocab, max_len),
         batch_size=batch_size, shuffle=True,
-        collate_fn=collate_pair_fn,
-        num_workers=num_workers, pin_memory=pin_memory,
-    )
-
-
-def get_allnli_labeled_pair_loader(
-    path: str,
-    vocab: Vocabulary,
-    batch_size: int = 64,
-    max_len: int = 128,
-    num_workers: int = 0,
-    pin_memory: bool = False,
-) -> DataLoader:
-    """DataLoader for Contrastive/CoSENT/CosineMSE — labeled (a, b, label) pairs."""
-    return DataLoader(
-        AllNLILabeledPairDataset(path, vocab, max_len),
-        batch_size=batch_size, shuffle=True,
-        collate_fn=collate_labeled_fn,
-        num_workers=num_workers, pin_memory=pin_memory,
-    )
-
-
-def get_allnli_triplet_loader(
-    path: str,
-    vocab: Vocabulary,
-    batch_size: int = 64,
-    max_len: int = 128,
-    num_workers: int = 0,
-    pin_memory: bool = False,
-) -> DataLoader:
-    """DataLoader for Triplet fine-tuning — (anchor, positive, negative) from AllNLI."""
-    return DataLoader(
-        AllNLITripletDataset(path, vocab, max_len),
-        batch_size=batch_size, shuffle=True,
-        collate_fn=collate_triplet_fn,
+        collate_fn=collate_pair,
         num_workers=num_workers, pin_memory=pin_memory,
     )
 
@@ -320,19 +181,14 @@ def get_sts_loaders(
     num_workers: int = 0,
     pin_memory: bool = False,
 ) -> dict:
-    """DataLoaders for STS evaluation.
-
-    paths example:
-        {'val':  'data/sts-222/stsb_validation.csv',
-         'test': 'data/sts-222/stsb_test.csv'}
-    """
+    # build one DataLoader per split (val, test) from STS benchmark CSV files
     loaders = {}
     for split, path in paths.items():
         if os.path.exists(path):
             loaders[split] = DataLoader(
-                STSDataset(pd.read_csv(path), vocab, max_len),
+                STSDataset(path, vocab, max_len),
                 batch_size=batch_size, shuffle=False,
-                collate_fn=collate_fn,
+                collate_fn=collate_sts,
                 num_workers=num_workers, pin_memory=pin_memory,
             )
         else:

@@ -39,7 +39,7 @@ def intersection(gt, pred):
     return max(min(gt[1], pred[1]) - max(gt[0], pred[0]), 0)
 
 def iou(gt, pred):
-    i = intersection(gt, pred)
+    i =intersection(gt, pred)
     return i / ((pred[1] - pred[0]) + (gt[1] - gt[0]) - i + 1e-32)
 
 def precision_interval(gt, pred):

@@ -1,25 +1,32 @@
-﻿import os
+﻿import gc
+import json
+import os
 import sys
+import time
 import uuid
 import threading
 from pathlib import Path
 from typing import Optional
+
 from dotenv import load_dotenv
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
-import OCR.utils.ovo_svm as ovo_svm
 
+import OCR.utils.ovo_svm as ovo_svm
 sys.modules["ovo_svm"] = ovo_svm
 
+import torch
+
 from Transformer import Transformer
-from Storage.CustomVectorStore import CustomVectorStore
 from Storage.HNSW import HNSWVectorStore
+from hybrid_embedder.embedder_adapter import HybridEmbedderAdapter
 from Storage.SQL.Repositories.VideoRepository import VideoRepository
 from Storage.SQL.Repositories.VRDRepository import VRDRepository
 from Storage.SQL.Repositories.ObjectRepository import ObjectRepository
 from Storage.SQL.Repositories.OCRRepository import OCRRepository
+from Storage.SQL.Repositories.TranscriptRepository import TranscriptRepository
 from Storage.SQL.DatabaseClient import SessionLocal
 from Storage.SQL.Models.Object import Object as ObjectModel
 from Storage.SQL.Models.ObjectVideo import ObjectVideo
@@ -28,12 +35,11 @@ from Storage.SQL.Models.VRDPredicate import VRDPredicate
 from Storage.SQL.Models.VRDObject import VRDObject
 from Storage.SQL.Models.VRDVideo import VRDVideo
 from Storage.SQL.Models.Video import Video as VideoModel
-import gc
-import torch
 from visual.SceneSegmenter import SceneSegmenter
 from OCR.src.OCR import OCR
-from visual.faster_rcnn.ObjectDetector import ObjectDetector
-from visual.VRD import VRD
+from visual.hog.ObjectDetector import ObjectDetector as HOGObjectDetector
+from visual.faster_rcnn.ObjectDetector import ObjectDetector as DLObjectDetector
+from visual.vrd_ml.VRD import VRD
 from audio.ASR import ASR
 from audio.SentenceSegmenter import SentenceSegmentation
 
@@ -42,7 +48,6 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 load_dotenv()
 
 app = FastAPI(title="VidSeek API")
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -50,20 +55,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# { job_id: { "status": "pending"|"running"|"done"|"error", "message": str } }
 _jobs: dict[str, dict] = {}
 
 
-# Pydantic schemas
+# -- Pydantic schemas --------------------------------------------------------
 
 class SearchResult(BaseModel):
-    type: str           # "ocr" | "transcript" | "object" | "vrd"
+    type: str
     text: str
     video_path: str
     start_time: float
     frame_time: Optional[float] = None
     end_time: float
-    sim: float         # similarity score; higher is better
+    sim: float
+    source_model: str = "transformer"
+    model_name: Optional[str] = None
 
 class VideoGroup(BaseModel):
     video_path: str
@@ -75,30 +81,30 @@ class SearchResponse(BaseModel):
     query: str
     results: list[SearchResult]
     videos: list[VideoGroup]
+    latency_ms: dict[str, float] = {}
 
 class GroupedResponse(BaseModel):
     videos: list[VideoGroup]
     total_results: int
+
 
 def _group_by_video(results: list[SearchResult]) -> list[VideoGroup]:
     groups: dict[str, dict] = {}
     for r in results:
         vp = r.video_path
         if vp not in groups:
-            groups[vp] = {
-                "video_path": vp,
-                "video_name": Path(vp).name,
-                "match_count": 0,
-                "results": [],
-            }
+            groups[vp] = {"video_path": vp, "video_name": Path(vp).name,
+                          "match_count": 0, "results": []}
         groups[vp]["match_count"] += 1
         groups[vp]["results"].append(r)
-    return [
-        VideoGroup(**g)
-        for g in sorted(groups.values(), key=lambda g: g["match_count"], reverse=True)
-    ]
+    return [VideoGroup(**g)
+            for g in sorted(groups.values(), key=lambda g: g["match_count"], reverse=True)]
 
-def _run_pipeline(job_id: str, video_path: str, video_id: int):
+
+# -- Processing pipeline -----------------------------------------------------
+
+def _run_pipeline(job_id: str, video_path: str, video_id: int,
+                   detector: str = 'craft', recognizer: str = 'easyocr', object_detector: str = 'faster_rcnn'):
     def update(msg: str, status: str = "running"):
         _jobs[job_id] = {"status": status, "message": msg}
 
@@ -110,22 +116,28 @@ def _run_pipeline(job_id: str, video_path: str, video_id: int):
         segmenter = SceneSegmenter(video_path)
         segmenter.segment_video()
         frames = segmenter.get_frames_with_metadata()
+        print(f"Extracted {len(frames)} frames from {video_path}")
         del segmenter; gc.collect()
 
         update("OCR processing...")
-        ocr = OCR(frames, video_path, video_id)
+        ocr = OCR(frames, video_path, video_id, detector=detector, recognizer=recognizer)
         ocr.process_frames()
-        ocr_index = ocr.get_inverted_index()
-        del ocr; gc.collect()
+        del ocr
+        gc.collect()
 
         update("Object detection...")
-        obj_det = ObjectDetector(video_path, frames)
-        obj_det.detect_objects()
+        obj_det = None
+        if object_detector == "faster_rcnn":
+            obj_det = DLObjectDetector(video_path, frames)
+        else:
+            obj_det = HOGObjectDetector(video_path, frames)
+        objects = obj_det.detect_objects()
         ObjectRepository().save_from_inverted_index(obj_det.get_inverted_index(), video_id)
-        del obj_det; gc.collect()
+        del obj_det
+        gc.collect()
 
         update("Visual relationship detection...")
-        vrd = VRD(frames=frames, video_path=video_path, api_key=os.getenv("GEMINI_TOKEN"))
+        vrd = VRD(frames=frames, video_path=video_path, objects=objects)
         vrd.detect_relationships()
         VRDRepository().save_from_inverted_index(vrd.get_inverted_index(), video_id)
         del vrd
@@ -143,22 +155,52 @@ def _run_pipeline(job_id: str, video_path: str, video_id: int):
             torch.cuda.empty_cache()
         gc.collect()
 
+        with open(transcription_path, "r", encoding="utf-8") as f:
+            _transcription = json.load(f)
+        asr_chunks = [
+            {
+                "text": c["text"].strip(),
+                "start": c["timestamp"][0] if c["timestamp"][0] is not None else 0.0,
+                "end": c["timestamp"][1] if c["timestamp"][1] is not None else 0.0,
+                "video_path": video_path,
+            }
+            for c in _transcription.get("chunks", [])
+            if c.get("text", "").strip()
+        ]
+
         update("Sentence segmentation...")
-        seg = SentenceSegmentation(
-            video_path=video_path,
-            transcript_json=transcription_path,
-            similarity_threshold=0.75,
-        )
-        seg.segment()
-        transcript_segments = seg.segments
+        seg = SentenceSegmentation(asr_chunks, video_path)
+        transcript_segments = seg.segment()
+        transcript_repo = TranscriptRepository()
+        transcript_repo.save_segments(transcript_segments, video_id)
+        transcript_repo.close()
         del seg; gc.collect()
 
-        update("Embedding and storing...")
-        transformer = Transformer(ocr_index, transcript_segments)
+        update("Embedding (Transformer)...")
+        transformer = Transformer(asr_chunks)
         transformer.transform()
-        hnsw_store = HNSWVectorStore()
+        hnsw_store = HNSWVectorStore(source="transformer")
         transformer.save_embeddings(hnsw_store)
-        hnsw_store.commit()  # flush vectors + graph to disk atomically
+        hnsw_store.commit()
+        del transformer, hnsw_store; gc.collect()
+
+        update("Embedding (HybridEmbedder)...")
+        try:
+            hybrid_adapter = HybridEmbedderAdapter(asr_chunks)
+            if not hybrid_adapter.load():
+                raise RuntimeError("Pre-trained model not found at Hybrid_embedder/models/")
+            hybrid_adapter.transform()
+            hybrid_store = HNSWVectorStore(
+                source="hybrid",
+                index_root="./data/hnsw_hybrid_index",
+                dimension=hybrid_adapter.dimension,
+            )
+            hybrid_adapter.save_embeddings(hybrid_store)
+            hybrid_store.commit()
+            del hybrid_adapter, hybrid_store
+            gc.collect()
+        except Exception as e:
+            print(f"[HybridEmbedder] indexing error (non-fatal): {e}")
 
         update("Done", status="done")
 
@@ -166,38 +208,87 @@ def _run_pipeline(job_id: str, video_path: str, video_id: int):
         _jobs[job_id] = {"status": "error", "message": str(e)}
         raise
 
-@app.get("/search", response_model=SearchResponse)
-def search(q: str, top_k: int = 10):
+
+@app.get("/search/transcript", response_model=SearchResponse)
+def search(q: str, top_k: int = 10, model: str = "transformer"):
     if not q.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty")
+    if model not in ("transformer", "hybrid", "both"):
+        raise HTTPException(status_code=400, detail="model must be 'transformer', 'hybrid', or 'both'")
 
-    transformer = Transformer({}, [])
-    embedding = transformer.transform_single_text(q)
-    embedding = embedding.tolist()
-    try:
-        ids, metadatas, flat_similarities = HNSWVectorStore().query(embedding, top_k=top_k)
-        vector_results = [
-            SearchResult(
-                type=meta.get("type", "unknown"),
-                text=meta.get("text", ""),
-                video_path=meta.get("video_path", ""),
-                start_time=float(meta.get("start_time", 0)),
-                end_time=float(meta.get("end_time", 0)),
-                sim=float(sim),
-            )
-            for _, meta, sim in zip(ids[0], metadatas[0], flat_similarities[0])
-            if sim > 0.5
-        ]
-    except Exception as e:
-        print(f"Error occurred while querying ChromaDB: {e}")
-        vector_results = []
-        
-    return SearchResponse(query=q, results=vector_results, videos=_group_by_video(vector_results))
+    results: list[SearchResult] = []
+    latencies: dict[str, float] = {}
+
+    if model in ("transformer", "both"):
+        t0 = time.time()
+        try:
+            emb = Transformer([]).transform_single_text(q).tolist()
+            _, metas, sims = HNSWVectorStore(source="transformer").query(emb, top_k=top_k)
+            for meta, sim in zip(metas[0], sims[0]):
+                if sim > 0.3:
+                    results.append(SearchResult(
+                        type=meta.get("type", "unknown"),
+                        text=meta.get("text", ""),
+                        video_path=meta.get("video_path", ""),
+                        start_time=float(meta.get("start_time", 0)),
+                        end_time=float(meta.get("end_time", 0)),
+                        sim=float(sim),
+                        source_model="transformer",
+                    ))
+        except Exception as e:
+            print(f"Transformer search error: {e}")
+        latencies["transformer"] = round((time.time() - t0) * 1000, 1)
+
+    if model in ("hybrid", "both"):
+        t0 = time.time()
+        try:
+            adapter = HybridEmbedderAdapter()
+            if not adapter.load():
+                raise RuntimeError("Pre-trained model not found at Hybrid_embedder/models/")
+            q_dense, q_sparse = adapter.encode(q)
+            _, metas, sims = HNSWVectorStore(
+                source="hybrid",
+                index_root="./data/hnsw_hybrid_index",
+                dimension=adapter.dimension,
+            ).query(q_dense.tolist(), top_k=top_k)
+            for meta, dense_sim in zip(metas[0], sims[0]):
+                doc_text = meta.get("text", "")
+                score = adapter.hybrid_score(dense_sim, q_sparse, doc_text, alpha=0.9)
+                if score > 0.15:
+                    results.append(SearchResult(
+                        type=meta.get("type", "unknown"),
+                        text=doc_text,
+                        video_path=meta.get("video_path", ""),
+                        start_time=float(meta.get("start_time", 0)),
+                        end_time=float(meta.get("end_time", 0)),
+                        sim=round(score, 4),
+                        source_model="hybrid",
+                    ))
+        except Exception as e:
+            print(f"HybridEmbedder search error: {e}")
+        latencies["hybrid"] = round((time.time() - t0) * 1000, 1)
+
+    results.sort(key=lambda r: r.sim, reverse=True)
+    return SearchResponse(query=q, results=results,
+                          videos=_group_by_video(results), latency_ms=latencies)
+
+
 
 @app.post("/videos/upload")
-async def upload_video(file: UploadFile = File(...)):
+async def upload_video(
+    file: UploadFile = File(...),
+    detector: str = Form('craft'),
+    recognizer: str = Form('easyocr'),
+    object_detector: str = Form('faster_rcnn')
+):
     if not file.filename.endswith((".mp4", ".avi", ".mov", ".mkv", ".webm")):
         raise HTTPException(status_code=400, detail="Unsupported video format")
+    if detector not in ("east", "craft"):
+        raise HTTPException(status_code=400, detail="detector must be 'east' or 'craft'")
+    if recognizer not in ("mser", "easyocr"):
+        raise HTTPException(status_code=400, detail="recognizer must be 'mser' or 'easyocr'")
+    if object_detector not in ('hog', 'faster_rcnn'):
+        raise HTTPException(status_code=400, detail="object_detector must be 'hog' or 'faster_rcnn'")
 
     dest = UPLOAD_DIR / file.filename
     with open(dest, "wb") as f:
@@ -213,9 +304,10 @@ async def upload_video(file: UploadFile = File(...)):
     job_id = str(uuid.uuid4())
     _jobs[job_id] = {"status": "pending", "message": "Queued"}
     threading.Thread(
-        target=_run_pipeline, args=(job_id, str(dest), video_id), daemon=True
+        target=_run_pipeline,
+        args=(job_id, str(dest), video_id, detector, recognizer, object_detector),
+        daemon=True,
     ).start()
-
     return JSONResponse({"job_id": job_id, "video_id": video_id})
 
 
@@ -227,7 +319,7 @@ def get_job_status(job_id: str):
     return job
 
 
-# Object & VRD option endpoints
+# -- Structured search -------------------------------------------------------
 
 @app.get("/objects")
 def list_objects():
@@ -241,13 +333,12 @@ def list_objects():
 
 @app.get("/vrd/options")
 def list_vrd_options():
-    
     db = SessionLocal()
     try:
         return {
-            "subjects": [r.key for r in db.query(VRDSubject).order_by(VRDSubject.key).all()],
+            "subjects":  [r.key for r in db.query(VRDSubject).order_by(VRDSubject.key).all()],
             "relations": [r.key for r in db.query(VRDPredicate).order_by(VRDPredicate.key).all()],
-            "objects": [r.key for r in db.query(VRDObject).order_by(VRDObject.key).all()],
+            "objects":   [r.key for r in db.query(VRDObject).order_by(VRDObject.key).all()],
         }
     finally:
         db.close()
@@ -257,21 +348,25 @@ def list_vrd_options():
 def search_by_ocr(q: str, video_id: Optional[int] = None):
     repo = OCRRepository()
     try:
-        word, confidence = repo.find_closest_word_video(q, video_id)
-        if word is None:
+        sorted_words = repo.find_closest_word_video(q, video_id)
+
+        if sorted_words is None:
             return []
-        return [{
-            "type": "ocr",
-            "text": word.word,
-            "video_path": word.video.file_path,
-            "video_name": word.video.file_name,
-            "start_time": word.start_time,
-            "end_time": word.end_time,
-            "score": confidence,
-        }]
+
+        return [
+            {
+                "type": "ocr",
+                "text": word.word,
+                "video_path": word.video.file_path,
+                "video_name": word.video.file_name,
+                "start_time": word.start_time,
+                "end_time": word.end_time,
+                "score": confidence,
+            }
+            for word, confidence in sorted_words
+        ]
     finally:
         repo.close()
-
 
 
 @app.get("/search/object", response_model=GroupedResponse)
@@ -281,9 +376,8 @@ def search_by_object(key: str):
         rows = (
             db.query(ObjectVideo, ObjectModel, VideoModel)
             .join(ObjectModel, ObjectVideo.object_id == ObjectModel.id)
-            .join(VideoModel, ObjectVideo.video_id == VideoModel.id)
-            .filter(ObjectModel.key == key)
-            .all()
+            .join(VideoModel,  ObjectVideo.video_id  == VideoModel.id)
+            .filter(ObjectModel.key == key).all()
         )
         results = [
             SearchResult(
@@ -294,6 +388,7 @@ def search_by_object(key: str):
                 start_time=float(ov.start_time or 0),
                 end_time=float(ov.end_time or 0),
                 sim=0.0,
+                model_name=ov.model_name
             )
             for ov, obj, video in rows
         ]
@@ -304,38 +399,55 @@ def search_by_object(key: str):
 
 @app.get("/search/vrd", response_model=GroupedResponse)
 def search_by_vrd(
-    subject: Optional[str] = None,
-    object: Optional[str] = None,
+    subject:  Optional[str] = None,
+    object:   Optional[str] = None,
     relation: Optional[str] = None,
 ):
     db = SessionLocal()
     try:
         q = (
             db.query(VRDVideo, VRDSubject, VRDPredicate, VRDObject, VideoModel)
-            .join(VRDSubject, VRDVideo.subject_id == VRDSubject.id)
+            .join(VRDSubject,   VRDVideo.subject_id   == VRDSubject.id)
             .join(VRDPredicate, VRDVideo.predicate_id == VRDPredicate.id)
-            .join(VRDObject, VRDVideo.object_id == VRDObject.id)
-            .join(VideoModel, VRDVideo.video_id == VideoModel.id)
+            .join(VRDObject,    VRDVideo.object_id    == VRDObject.id)
+            .join(VideoModel,   VRDVideo.video_id     == VideoModel.id)
         )
-        if subject: q = q.filter(VRDSubject.key == subject)
+        if subject:  q = q.filter(VRDSubject.key   == subject)
         if relation: q = q.filter(VRDPredicate.key == relation)
-        if object: q = q.filter(VRDObject.key == object)
+        if object:   q = q.filter(VRDObject.key    == object)
         results = [
-            SearchResult(
-                type="vrd",
-                text=f"{subj.key} - {pred.key} - {obj.key}",
-                video_path=video.file_path,
-                start_time=float(vrd.start_time or 0),
-                end_time=float(vrd.end_time or 0),
-                frame_time=float(vrd.frame_time or 0), 
-                sim=0.0,
-            )
+            SearchResult(type="vrd", text=f"{subj.key} - {pred.key} - {obj.key}",
+                         video_path=video.file_path,
+                         start_time=float(vrd.start_time or 0),
+                         end_time=float(vrd.end_time or 0),
+                         frame_time=float(vrd.frame_time or 0), sim=0.0)
             for vrd, subj, pred, obj, video in q.all()
         ]
         return GroupedResponse(videos=_group_by_video(results), total_results=len(results))
     finally:
         db.close()
 
+
+# -- Chapters ----------------------------------------------------------------
+
+@app.get("/videos/chapters")
+def get_chapters(path: str):
+    db = SessionLocal()
+    try:
+        from Storage.SQL.Models.TranscriptSegment import TranscriptSegment as TSModel
+        video = db.query(VideoModel).filter(VideoModel.file_path == path).first()
+        if not video:
+            raise HTTPException(status_code=404, detail="Video not found")
+        rows = (db.query(TSModel)
+                .filter(TSModel.video_id == video.id)
+                .order_by(TSModel.start).all())
+        return [{"id": r.id, "title": r.title, "start": r.start,
+                 "end": r.end, "text": r.text} for r in rows]
+    finally:
+        db.close()
+
+
+# -- Video stream ------------------------------------------------------------
 
 @app.get("/video/stream")
 def stream_video(path: str):
@@ -345,10 +457,7 @@ def stream_video(path: str):
     p = p.resolve()
     if not p.exists():
         raise HTTPException(status_code=404, detail="Video not found")
-    ext = p.suffix.lower()
-    media_types = {
-        ".mp4": "video/mp4", ".webm": "video/webm",
-        ".avi": "video/x-msvideo", ".mov": "video/quicktime",
-        ".mkv": "video/x-matroska",
-    }
-    return FileResponse(str(p), media_type=media_types.get(ext, "video/mp4"))
+    media_types = {".mp4": "video/mp4", ".webm": "video/webm",
+                   ".avi": "video/x-msvideo", ".mov": "video/quicktime",
+                   ".mkv": "video/x-matroska"}
+    return FileResponse(str(p), media_type=media_types.get(p.suffix.lower(), "video/mp4"))

@@ -5,24 +5,18 @@ from tqdm import tqdm
 from visual.hog.datastructures.voc_dataset import VOCDataset
 
 
-def _compute_window_iou_mask(
-    feat_map_shape,
-    ch: int,
-    cw: int,
-    cell: float,
-    scale: float,
-    gt_box,
-    min_iou: float,
-) -> np.ndarray:
+def _compute_window_iou_mask(feat_map_shape, ch, cw, cell, scale, gt_box, min_iou):
     H_cells, W_cells, _ = feat_map_shape
     n_y = H_cells - ch + 1
     n_x = W_cells - cw + 1
+    # compute window positions in image space
     y_idx = np.arange(n_y, dtype=np.float32)
     x_idx = np.arange(n_x, dtype=np.float32)
     win_x0 = (x_idx * cell * scale)[np.newaxis, :]
     win_y0 = (y_idx * cell * scale)[:, np.newaxis]
     win_x1 = win_x0 + cw * cell * scale
     win_y1 = win_y0 + ch * cell * scale
+    # compute IoU with gt box
     gx0, gy0, gx1, gy1 = gt_box
     ix0 = np.maximum(win_x0, gx0)
     iy0 = np.maximum(win_y0, gy0)
@@ -36,12 +30,7 @@ def _compute_window_iou_mask(
     return iou >= min_iou, iou
 
 
-
-def update_positive_latents(
-    detector,
-    dataset: VOCDataset,
-    max_images: int | None = None,
-) -> None:
+def update_positive_latents(detector, dataset, max_images=None):
     print(" -> Updating positive latent assignments via pyramid search")
     n = len(dataset) if max_images is None else min(len(dataset), max_images)
     indices = np.arange(n)
@@ -50,28 +39,26 @@ def update_positive_latents(
             comp.X_pos = np.array([])
             comp.bbr_X = np.array([])
             comp.bbr_y = np.array([])
-
     cell = detector.hog_descriptor.cell_size
     min_iou = detector.min_iou_between_gt_and_latent
-    fallback_iou = max(0.1, min_iou / 2.0)
-    acc_X_pos: dict = {}
-    acc_bbr_X: dict = {}
-    acc_bbr_y: dict = {}
+    fb_iou = max(0.1, min_iou / 2.0)
+    acc_X_pos = {}
+    acc_bbr_X = {}
+    acc_bbr_y = {}
     for cls, comps in detector.cls_comps.items():
         for comp in comps:
             key = (cls, comp.id)
             acc_X_pos[key] = []
             acc_bbr_X[key] = []
             acc_bbr_y[key] = []
-
     counter = 0
     for idx in tqdm(indices, desc="Latent Update"):
         img = dataset.get_image(idx)
         if img is None:
             continue
-        boxes, labels = dataset.get_annotation(idx)
-        pyramid = detector.hog_descriptor.compute_feature_pyramid(img)
-        for gt_box, label in zip(boxes, labels):
+        boxes, lbls = dataset.get_annotation(idx)
+        p = detector.hog_descriptor.compute_feature_pyramid(img)
+        for gt_box, label in zip(boxes, lbls):
             if label not in detector.classes:
                 continue
             gt_cx = (gt_box[0] + gt_box[2]) / 2.0
@@ -84,22 +71,21 @@ def update_positive_latents(
                 comp_best_score = -float("inf")
                 comp_best_feat = None
                 comp_best_bbr_target = None
-                fallback_best_iou = -1.0
-                fallback_best_score = -float("inf")
-                fallback_best_feat = None
-                fallback_best_bbr = None
-                for level in pyramid:
+                fb_best_iou = -1.0
+                fb_best_score = -float("inf")
+                fb_best_feat = None
+                fb_best_bbr = None
+                for level in p:
                     feat_map = level.feature_map
                     H_cells, W_cells, feat_depth = feat_map.shape
                     scale = level.scale
                     if H_cells < ch or W_cells < cw:
                         continue
                     iou_mask, iou_vals = _compute_window_iou_mask(
-                        feat_map.shape, ch, cw, cell, scale,
-                        gt_box, min_iou,
+                        feat_map.shape, ch, cw, cell, scale, gt_box, min_iou
                     )
                     max_iou_here = float(iou_vals.max()) if iou_vals.size > 0 else 0.0
-                    if max_iou_here >= fallback_iou and max_iou_here > fallback_best_iou:
+                    if max_iou_here >= fb_iou and max_iou_here > fb_best_iou:
                         fb_y, fb_x = np.unravel_index(int(np.argmax(iou_vals)), iou_vals.shape)
                         fb_feat_depth = feat_depth
                         windows_full_fb = sliding_window_view(feat_map, (ch, cw, fb_feat_depth))[:, :, 0]
@@ -119,25 +105,23 @@ def update_positive_latents(
                             np.log(gt_w / win_w),
                             np.log(gt_h / win_h),
                         ]
-                        fallback_best_iou = max_iou_here
-                        fallback_best_score = fb_score
-                        fallback_best_feat = fb_feat_raw
-                        fallback_best_bbr = fb_bbr
+                        fb_best_iou = max_iou_here
+                        fb_best_score = fb_score
+                        fb_best_feat = fb_feat_raw
+                        fb_best_bbr = fb_bbr
                         del windows_full_fb, fb_feat_raw
-
                     valid_ys, valid_xs = np.where(iou_mask)
                     if valid_ys.size == 0:
                         continue
-                    windows_full = sliding_window_view(
-                        feat_map, (ch, cw, feat_depth))[:, :, 0]
+                    windows_full = sliding_window_view(feat_map, (ch, cw, feat_depth))[:, :, 0]
                     valid_windows = windows_full[valid_ys, valid_xs]
-                    X_valid = valid_windows.reshape(
-                        valid_ys.size, ch * cw * feat_depth).astype(np.float32)
+                    X_valid = valid_windows.reshape(valid_ys.size, ch * cw * feat_depth).astype(np.float32)
                     batch_scores = comp.svm.decision_function(X_valid)
                     best_idx = int(np.argmax(batch_scores))
                     if batch_scores[best_idx] > comp_best_score:
                         comp_best_score = float(batch_scores[best_idx])
                         comp_best_feat = X_valid[best_idx].copy()
+                        # compute bbox regression target
                         wy = int(valid_ys[best_idx])
                         wx = int(valid_xs[best_idx])
                         win_x0_px = wx * cell * scale
@@ -154,22 +138,21 @@ def update_positive_latents(
                             np.log(gt_w / win_w),
                             np.log(gt_h / win_h),
                         ]
-
                     del X_valid, batch_scores, valid_windows, windows_full
+                # store the best found latent assignment
                 if comp_best_feat is not None:
                     acc_X_pos[key].append(comp_best_feat.astype(np.float16))
                     acc_bbr_X[key].append(comp_best_feat)
                     acc_bbr_y[key].append(np.array(comp_best_bbr_target, dtype=np.float32))
-                elif fallback_best_feat is not None:
-                    acc_X_pos[key].append(fallback_best_feat.astype(np.float16))
-                    acc_bbr_X[key].append(fallback_best_feat)
-                    acc_bbr_y[key].append(np.array(fallback_best_bbr, dtype=np.float32))
-
-        del img, pyramid, boxes, labels
+                elif fb_best_feat is not None:
+                    # use fallback if nothing found at main threshold
+                    acc_X_pos[key].append(fb_best_feat.astype(np.float16))
+                    acc_bbr_X[key].append(fb_best_feat)
+                    acc_bbr_y[key].append(np.array(fb_best_bbr, dtype=np.float32))
+        del img, p, boxes, lbls
         counter += 1
         if counter % 50 == 0:
             gc.collect()
-
     for cls, comps in detector.cls_comps.items():
         for comp in comps:
             key = (cls, comp.id)
@@ -179,51 +162,14 @@ def update_positive_latents(
             comp.X_pos = (np.vstack(rows_pos) if rows_pos else np.empty((0,), dtype=np.float16))
             comp.bbr_X = (np.vstack(rows_bbr) if rows_bbr else np.empty((0,), dtype=np.float32))
             comp.bbr_y = (np.vstack(rows_y) if rows_y else np.empty((0, 4), dtype=np.float32))
-    total_by_cls: dict = {}
-    for cls, comps in detector.cls_comps.items():
-        cls_total = 0
-        for comp in comps:
-            n_pos = comp.X_pos.shape[0]
-            prev = getattr(comp, '_prev_n_pos', None)
-            delta_str = (f" (delta {n_pos - prev:+d} from prev epoch)" if prev is not None else "")
-            starve_str = (" *** STARVED - zero positives ***"
-                          if n_pos == 0
-                          else (f" *** LOW - dropped {prev - n_pos} "
-                                f"({100*(prev-n_pos)//max(prev,1)}%) ***"
-                                if (prev is not None and prev > 0
-                                    and n_pos < prev // 2) else ""))
-            print(f" {comp.class_name}-{comp.id}: {n_pos:4d} pos  "
-                  f"win={comp.pixel_w}x{comp.pixel_h}px"
-                  f"{delta_str}{starve_str}")
-            comp._prev_n_pos = n_pos
-            cls_total += n_pos
-        total_by_cls[cls] = cls_total
-
-    print("\n  Per-class positive totals:")
-    starved, shrunk = [], []
-    for cls, total in total_by_cls.items():
-        comps = detector.cls_comps[cls]
-        prev_total = sum(getattr(c, '_prev_n_pos', total) for c in comps)
-        tag = "  *** ZERO ***" if total == 0 else ""
-        print(f"    {cls:<15}: {total:5d}{tag}")
-        if total == 0:
-            starved.append(cls)
-        elif total < prev_total // 2:
-            shrunk.append(cls)
-    if starved:
-        print(f"\n  WARNING: {len(starved)} class(es) fully starved "
-              f"(0 positives): {starved}")
-    if shrunk:
-        print(f"  WARNING: {len(shrunk)} class(es) lost >50% positives "
-              f"vs prior epoch: {shrunk}")
 
 
-def fit_bbox_regressors(detector) -> None:
+def fit_bbox_regs(detector):
     print("-> Fitting bounding-box regressors on latent offsets")
     for cls, comps in detector.cls_comps.items():
         for comp in comps:
             if comp.bbr_X.shape[0] > 0:
-                comp.bbox_regressor.fit(comp.bbr_X, comp.bbr_y)
-                comp.bbox_regressor.fitted = True
+                comp.bbox_reg.fit(comp.bbr_X, comp.bbr_y)
+                comp.bbox_reg.fitted = True
             else:
-                print(f"  Warning: No BBR targets for '{cls}' component {comp.id}.")
+                print(f"Warning: No BBR targets for '{cls}' component {comp.id}.")

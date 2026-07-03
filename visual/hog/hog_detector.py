@@ -13,7 +13,7 @@ from visual.hog.persistence import save, load
 from visual.hog.checkpoint import save_checkpoint, load_checkpoint
 from visual.hog.training.data_processing import process_dataset, learn_window_sizes
 from visual.hog.training.feature_construction import construct_Xpos_Xneg
-from visual.hog.training.latent_update import update_positive_latents, fit_bbox_regressors
+from visual.hog.training.latent_update import update_positive_latents, fit_bbox_regs
 from visual.hog.training.hard_negative_mining import mine_hard_negatives_pyramid
 from visual.hog.inference.detection import detect
 from visual.hog.inference.contextual_rescoring import ContextualRescorer
@@ -23,22 +23,22 @@ class HOGDetector:
         self,
         classes,
         hog_descriptor_params,
-        n_components: int = 2,
-        c_svm: float = 0.01,
-        max_itr_svm: int = 30_000,
-        training_epochs: int = 2,
-        area_percentile: float = 80,
-        hard_neg_threshold: float = -1,   # according to the paper: -1
-        pyramid_step: int = 2,          # used to fasten searching only in inference stage
-        max_hard_per_image: int = 20,
-        bg_multiplier: float = 2.0,
-        other_classes_total_ratio: float = 1.0,
-        bbr_alpha: float = 1000.0,
-        min_iou_between_gt_and_latent: float = 0.35,
-        contextual_rescorer_iou_thresh: float = 0.5,
-        contextual_rescorer_C: float = 1.0,
-        contextual_rescorer_detection_threshold: float = 0.05,
-        contextual_rescorer_neg_size: int = 30_000,
+        n_components=2,
+        c_svm=0.01,
+        max_itr_svm=30000,
+        training_epochs=2,
+        area_percentile=80,
+        hard_neg_threshold=-1,
+        pyramid_step=2,
+        max_hard_per_image=20,
+        bg_multiplier=2.0,
+        other_classes_total_ratio=1.0,
+        bbr_alpha=1000.0,
+        min_iou_between_gt_and_latent=0.35,
+        contextual_rescorer_iou_thresh=0.5,
+        contextual_rescorer_C=1.0,
+        contextual_rescorer_detection_threshold=0.05,
+        contextual_rescorer_neg_size=30000,
     ):
         self.classes = classes
         self.hog_params = hog_descriptor_params
@@ -55,12 +55,11 @@ class HOGDetector:
         self.bbr_alpha = bbr_alpha
         self.min_iou_between_gt_and_latent = min_iou_between_gt_and_latent
         self.default_window_size = (64, 64)
-
         self.hog_descriptor = HOGDescriptor(**self.hog_params)
-        self.cls_comps: dict[str, list[Component]] = {cls: [] for cls in self.classes}
-        self.svms: dict[str, list[LinearSVC]] = {cls: [] for cls in self.classes}
-        self.kmeans_clfs: dict[str, KMeans | None] = {cls: None for cls in self.classes}
-        self.trained_flag: bool = False
+        self.cls_comps = {cls: [] for cls in self.classes}
+        self.svms = {cls: [] for cls in self.classes}
+        self.kmeans_clfs = {cls: None for cls in self.classes}
+        self.trained_flag = False
         self.contextual_rescorer = ContextualRescorer(
             classes=self.classes,
             iou_thresh=contextual_rescorer_iou_thresh,
@@ -69,50 +68,42 @@ class HOGDetector:
             neg_size=contextual_rescorer_neg_size,
         )
 
-
-    def _extract_custom_hog(self, image_patch) -> np.ndarray:
+    def _extract_custom_hog(self, image_patch):
         return self.hog_descriptor.compute_feature_map(image_patch).flatten()
 
-    def _calculate_iou(self, boxA, boxB) -> float:
+    def _calculate_iou(self, boxA, boxB):
         return calculate_iou(boxA, boxB)
-
 
     def train(
         self,
-        train_ds: VOCDataset,
-        min_box_area: int = 400,
-        max_train_images: int | None = None,
-        max_rescore_images: int | None= None,
-        neg_patches_per_image: int = 2,
-        checkpoint_path: str | Path = './checkpoint',
-        skip_step1: bool = False,
-        rescorer_checkpoint_every: int = 50,
-    ) -> None:
+        train_ds,
+        min_box_area=400,
+        max_train_images=None,
+        max_rescore_images=None,
+        neg_patches_per_image=2,
+        checkpoint_path='./checkpoint',
+        skip_step1=False,
+        rescorer_checkpoint_every=50,
+    ):
         checkpoint_path = Path(checkpoint_path)
-        skip_step1  &= checkpoint_path.exists()
+        skip_step1 = skip_step1 and checkpoint_path.exists()
         if not skip_step1:
             t1 = time.time()
             print("\nStep 1: Initialisation\n")
-            
-            print("  1-a: Processing dataset")
-            pos_patches, bboxes_wh, gt_boxes, neg_images = process_dataset(
-                self, train_ds, min_box_area, max_train_images
-            )
+            print("1-a: Processing dataset")
+            pos_patches, bboxes_wh, gt_boxes, neg_images = process_dataset(self, train_ds, min_box_area, max_train_images)
             t2 = time.time()
             print(f"\tDone in {t2 - t1:.2f} seconds")
-            
-            print("\n  1-b: Learning window sizes")
+            print("\n1-b: Learning window sizes")
             comp_labels = learn_window_sizes(self, bboxes_wh)
             t3 = time.time()
             print(f"\tDone in {t3 - t2:.2f} seconds")
-            
-            print("\n  1-c: Constructing X_pos and X_neg per component")
+            print("\n1-c: Constructing X_pos and X_neg per component")
             print("\t(background patches sampled at each component's pixel size)\n")
             construct_Xpos_Xneg(self, pos_patches, comp_labels, neg_images, neg_patches_per_image)
             t4 = time.time()
             print(f"\tDone in {t4 - t3:.2f} seconds")
-
-            print("\n  1-d: Fitting initial SVMs")
+            print("\n1-d: Fitting initial SVMs")
             for comps in self.cls_comps.values():
                 for comp in comps:
                     comp.fit_svm(split_ratio=None)
@@ -120,30 +111,23 @@ class HOGDetector:
             t5 = time.time()
             print(f"\tDone in {t5 - t4:.2f} seconds")
             save_checkpoint(self, checkpoint_path, pos_patches, cur_epoch=0)
-        
         if skip_step1:
             epoch, pos_patches = load_checkpoint(self, checkpoint_path)
         else:
             epoch = 0
         t5 = time.time()
-
         print("\nStep 2: Latent SVM loop\n")
         while epoch < self.training_epochs:
-            print(f"  Epoch {epoch + 1}/{self.training_epochs}\n")
-
-            print("  2-a: Updating positive latent assignments")
+            print(f"Epoch {epoch + 1}/{self.training_epochs}\n")
+            print("2-a: Updating positive latent assignments")
             update_positive_latents(self, train_ds, max_train_images)
             t6 = time.time()
             print(f"\tDone in {t6 - t5:.2f} seconds")
-
-            print("\n  2-b: Mining hard negatives via feature pyramid")
+            print("\n2-b: Mining hard negatives via feature pyramid")
             mine_hard_negatives_pyramid(self, train_ds, max_train_images, pos_patches, do_flush_initial=(epoch == 0))
             t7 = time.time()
             print(f"\tDone in {t7 - t6:.2f} seconds")
-
-            print("\n  2-c: Retraining component SVMs")
-            # Hold out a calibration split only on the final epoch so we can
-            # fit Platt scaling without leaking training examples.
+            print("\n2-c: Retraining component SVMs")
             split_ratio = 0.15 if epoch == self.training_epochs - 1 else None
             for cls, comps in self.cls_comps.items():
                 for comp in comps:
@@ -154,76 +138,59 @@ class HOGDetector:
             print(f"\tDone in {t8 - t7:.2f} seconds")
             epoch += 1
             save_checkpoint(self, checkpoint_path, pos_patches, cur_epoch=epoch)
-
         t8 = time.time()
         print("\nStep 3: Post-processing\n")
-
-        print("  3-a: Bounding-box regression")
-        fit_bbox_regressors(self)
+        print("3-a: Bounding-box regression")
+        fit_bbox_regs(self)
         t9 = time.time()
         print(f"\tDone in {t9 - t8:.2f} seconds")
-
-        print("\n  3-b: Score calibration (Platt scaling)")
+        print("\n3-b: Score calibration")
         for comps in self.cls_comps.values():
             for comp in comps:
                 comp.fit_calibration()
         t10 = time.time()
         print(f"\tDone in {t10 - t9:.2f} seconds")
-                
         trained = [c for c in self.classes if self.svms.get(c)]
         for cls, comps in self.cls_comps.items():
             for comp in comps:
                 comp.del_training_data()
         gc.collect()
-
         self.trained_flag = True
         t10 = time.time()
-        print("\n  3-c: Contextual Rescoring (Section 7.3)")
+        print("\n3-c: Contextual Rescoring")
         rescorer_checkpoint_path = checkpoint_path / "contextual_rescorer_ckpt.pkl"
         self.contextual_rescorer.fit(
             self,
             train_ds,
-            max_rescore_images if max_rescore_images is not None else max_train_images,
+            max_rescore_images if max_rescore_images != None else max_train_images,
             checkpoint_path=str(rescorer_checkpoint_path),
             checkpoint_every=rescorer_checkpoint_every,
         )
         t11 = time.time()
         print(f"\tDone in {t11 - t10:.2f} seconds")
         gc.collect()
-        print(
-            f"\nTraining complete - "
-            f"{len(trained)}/{len(self.classes)} classes, "
-            f"{self.n_components} components each."
-        )
-        
-        # remove checkpoint after training.
+        print(f"\nTraining complete - {len(trained)}/{len(self.classes)} classes, {self.n_components} components each.")
         # shutil.rmtree(checkpoint_path)
 
-    def detect(
-        self,
-        image,
-        threshold=None,
-        overlap_threshold: float = 0.3,
-        pyramid_lambda=None,
-        use_context: bool = True,
-    ):
+    def detect(self, image, threshold=None, overlap_threshold=0.3, pyramid_lambda=None, use_context=True):
         boxes, scores, labels = detect(self, image, overlap_threshold, pyramid_lambda)
-        if use_context and self.contextual_rescorer.fitted and boxes:
+        if use_context == True and self.contextual_rescorer.fitted == True and boxes:
             ih, iw = image.shape[:2]
             scores = self.contextual_rescorer.rescore(boxes, scores, labels, iw, ih)
             order = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
-            boxes  = [boxes[i]  for i in order]
+            boxes = [boxes[i] for i in order]
             scores = [scores[i] for i in order]
             labels = [labels[i] for i in order]
-        threshold = 0 if threshold is None else threshold
+        if threshold is None:
+            threshold = 0
         keep_indices = np.where(np.array(scores) >= threshold)[0]
         boxes = [boxes[i] for i in keep_indices]
         scores = [scores[i] for i in keep_indices]
         labels = [labels[i] for i in keep_indices]
         return boxes, scores, labels
 
-    def save(self, path) -> None:
+    def save(self, path):
         save(self, path)
 
-    def load(self, path) -> None:
+    def load(self, path):
         load(self, path)

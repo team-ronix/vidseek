@@ -1,6 +1,6 @@
-import { useRef } from 'react';
-import { ArrowLeft, Clock, Play } from 'lucide-react';
-import { getVideoStreamUrl } from '../api/client';
+﻿import { useEffect, useRef, useState } from 'react';
+import { ArrowLeft, BookOpen, Clock, Play } from 'lucide-react';
+import { getChapters, getVideoStreamUrl } from '../api/client';
 
 function fmtTime(secs) {
   if (secs == null) return null;
@@ -11,10 +11,19 @@ function fmtTime(secs) {
 
 export function VideoPlayer({ video, onBack }) {
   const videoRef = useRef(null);
+  const [chapters, setChapters] = useState([]);
+  const [activeTab, setActiveTab] = useState('matches'); // 'matches' | 'chapters'
 
-  const seekTo = (startTime) => {
+  useEffect(() => {
+    setChapters([]);
+    getChapters(video.video_path)
+      .then(setChapters)
+      .catch(() => {});
+  }, [video.video_path]);
+
+  const seekTo = (time) => {
     if (!videoRef.current) return;
-  videoRef.current.currentTime = startTime;
+    videoRef.current.currentTime = time;
     videoRef.current.play();
   };
 
@@ -35,35 +44,87 @@ export function VideoPlayer({ video, onBack }) {
         preload="metadata"
       />
 
-      <div className="video-results-list">
-        <p className="video-results-header">
-          <strong>{video.match_count}</strong> match{video.match_count !== 1 ? 'es' : ''} - click any to seek
-        </p>
-        {video.results.map((r, i) => {
-          const start = fmtTime(r.start_time);
-          const end   = fmtTime(r.end_time);
-          return (
-            <button
-              key={i}
-              className="video-result-item"
-              onClick={() => seekTo(r.frame_time || r.start_time)}
-              title={`Seek to ${r.frame_time || r.start_time  }`}
-            >
-              <span className={`type-badge type-${r.type}`}>{r.type}</span>
-              <span className="video-result-text">{r.text}</span>
-              {start && (
-                <span className="video-result-time">
-                  <Clock size={11} />
-                  {start}{end ? ` → ${end}` : ''}
+      <div className="video-tabs">
+        <button
+          className={`video-tab${activeTab === 'matches' ? ' active' : ''}`}
+          onClick={() => setActiveTab('matches')}
+        >
+          <Play size={12} />
+          <span>{video.match_count} match{video.match_count !== 1 ? 'es' : ''}</span>
+        </button>
+        {chapters.length > 0 && (
+          <button
+            className={`video-tab${activeTab === 'chapters' ? ' active' : ''}`}
+            onClick={() => setActiveTab('chapters')}
+          >
+            <BookOpen size={12} />
+            <span>{chapters.length} chapter{chapters.length !== 1 ? 's' : ''}</span>
+          </button>
+        )}
+      </div>
+
+      {activeTab === 'matches' && (
+        <div className="video-results-list">
+          <p className="video-results-header">
+            <strong>{video.match_count}</strong> match{video.match_count !== 1 ? 'es' : ''} - click any to seek
+          </p>
+          {video.results.map((r, i) => {
+            const start = fmtTime(r.start_time);
+            const end   = fmtTime(r.end_time);
+            return (
+              <button
+                key={i}
+                className="video-result-item"
+                onClick={() => seekTo(r.frame_time || r.start_time)}
+              >
+                <span className={`type-badge type-${r.type}`}>{r.type}</span>
+                <span className="video-result-text">{r.text}</span>
+                {r.source_model && r.type == 'transcript' && (
+                  <span className={`model-badge model-${r.source_model}`}>{r.source_model}</span>
+                )}
+                {r.model_name && r.type == 'object' && (
+                  <span className="video-result-model">{r.model_name}</span>
+                )}
+                {start && (
+                  <span className="video-result-time">
+                    <Clock size={11} />
+                    {start}{end ? ` -> ${end}` : ''}
+                  </span>
+                )}
+                <span className="video-result-play">
+                  <Play size={11} />
                 </span>
-              )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {activeTab === 'chapters' && (
+        <div className="video-results-list">
+          <p className="video-results-header">
+            <strong>{chapters.length}</strong> chapter{chapters.length !== 1 ? 's' : ''} - click any to jump
+          </p>
+          {chapters.map((ch, i) => (
+            <button
+              key={ch.id}
+              className="video-result-item chapter-item"
+              onClick={() => seekTo(ch.start)}
+            >
+              <span className="chapter-index">{i + 1}</span>
+              <span className="video-result-text chapter-title">{ch.title}</span>
+              <span className="video-result-time">
+                <Clock size={11} />
+                {fmtTime(ch.start)}{ch.end ? ` -> ${fmtTime(ch.end)}` : ''}
+              </span>
               <span className="video-result-play">
                 <Play size={11} />
               </span>
             </button>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
+
