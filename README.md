@@ -6,6 +6,7 @@ VidSeek is a multimodal video search engine that lets you query video content us
 
 ## Table of Contents
 
+- [Demo](#demo-video)
 - [Architecture](#architecture)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
@@ -19,6 +20,12 @@ VidSeek is a multimodal video search engine that lets you query video content us
 - [Quick-start Summary](#quick-start-summary)
 
 ---
+
+## Demo Video
+
+<video width="1200" height="800" controls>
+<source src="./application.mp4" type="video/mp4">
+</video>
 
 ## Architecture
 
