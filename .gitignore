@@ -62,7 +62,7 @@ htmlcov/
 # Project Specific
 # Video files
 *.mp4
-!application.mp4
+!demo.mp4
 *.avi
 *.mov
 *.mkv
@@ -74,6 +74,7 @@ htmlcov/
 *.jpg
 *.jpeg
 *.png
+!demo.png
 *.gif
 *.bmp
 *.webp
