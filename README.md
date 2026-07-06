@@ -23,7 +23,7 @@ VidSeek is a multimodal video search engine that lets you query video content us
 
 ## Demo Video
 
-[![Demo](demo.png)](demo.mp4)
+[![Demo](demo.png)](https://drive.google.com/file/d/1EmelAnq1qOIz7f_cOiTJNQ1F5m1Y8oFE/view?usp=drive_link)
 
 ## Architecture
 
